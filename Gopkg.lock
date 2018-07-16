@@ -2,41 +2,169 @@
 
 
 [[projects]]
+  digest = "1:282acb7fe0ca456de4ea5c3174c2691a2bd74008462e966b69094ad0b2c23e6e"
   name = "github.com/BurntSushi/toml"
   packages = ["."]
+  pruneopts = "UT"
   revision = "b26d9c308763d68093482582cea63d69be07a0f0"
   version = "v0.3.0"
 
 [[projects]]
-  branch = "master"
-  name = "github.com/buildpack/packs"
+  digest = "1:ecb7add8f182eecd55b46fa6d06875483f6d8e9e63ed6ec0c308518d161cf37d"
+  name = "github.com/Microsoft/go-winio"
   packages = ["."]
-  revision = "77f10dfb2fe840bd870403ad97f08b749298188f"
+  pruneopts = "UT"
+  revision = "67921128fb397dd80339870d2193d6b1e6856fd4"
+  version = "v0.4.8"
 
 [[projects]]
+  branch = "exporter"
+  digest = "1:1e203d03e739cbe314f43cde8571794e37097c6993b6f313d01c0174f361e2ea"
+  name = "github.com/buildpack/packs"
+  packages = [
+    ".",
+    "img",
+  ]
+  pruneopts = "UT"
+  revision = "21a086bbc4c8726feae447ad52cfe86d042afb1e"
+
+[[projects]]
+  digest = "1:00a2069a86806eb551c15e8e4c6606357cc8e3a905767a1eca6812f8e4a28d2a"
+  name = "github.com/docker/distribution"
+  packages = [
+    "digest",
+    "reference",
+  ]
+  pruneopts = "UT"
+  revision = "48294d928ced5dd9b378f7fd7c6f5da3ff3f2c89"
+  version = "v2.6.2"
+
+[[projects]]
+  digest = "1:c7731ce9f939a552e3da482a64a8d197cd479819b1eaa887d7363d86a7ddd956"
+  name = "github.com/docker/docker"
+  packages = [
+    "api/types",
+    "api/types/blkiodev",
+    "api/types/container",
+    "api/types/events",
+    "api/types/filters",
+    "api/types/mount",
+    "api/types/network",
+    "api/types/reference",
+    "api/types/registry",
+    "api/types/strslice",
+    "api/types/swarm",
+    "api/types/time",
+    "api/types/versions",
+    "api/types/volume",
+    "client",
+    "pkg/tlsconfig",
+  ]
+  pruneopts = "UT"
+  revision = "092cba3727bb9b4a2f0e922cd6c0f93ea270e363"
+  version = "v1.13.1"
+
+[[projects]]
+  digest = "1:e76dacf1c43685d6abc79c89bab193362c2028744e57eee425ebfa277b46efb2"
+  name = "github.com/docker/go-connections"
+  packages = [
+    "nat",
+    "sockets",
+    "tlsconfig",
+  ]
+  pruneopts = "UT"
+  revision = "3ede32e2033de7505e6500d6c868c2b9ed9f169d"
+  version = "v0.3.0"
+
+[[projects]]
+  digest = "1:6f82cacd0af5921e99bf3f46748705239b36489464f4529a1589bc895764fb18"
+  name = "github.com/docker/go-units"
+  packages = ["."]
+  pruneopts = "UT"
+  revision = "47565b4f722fb6ceae66b95f853feed578a4a51c"
+  version = "v0.3.3"
+
+[[projects]]
+  digest = "1:bc38c7c481812e178d85160472e231c5e1c9a7f5845d67e23ee4e706933c10d8"
   name = "github.com/golang/mock"
   packages = ["gomock"]
+  pruneopts = "UT"
   revision = "c34cdb4725f4c3844d095133c6e40e448b86589b"
   version = "v1.1.1"
 
 [[projects]]
+  digest = "1:755467c83ab20c62727c4494c62cb8f6badca06ba989a988ef0cb27ad093c2c3"
+  name = "github.com/google/go-containerregistry"
+  packages = [
+    "pkg/authn",
+    "pkg/name",
+    "pkg/v1",
+    "pkg/v1/daemon",
+    "pkg/v1/empty",
+    "pkg/v1/mutate",
+    "pkg/v1/partial",
+    "pkg/v1/random",
+    "pkg/v1/remote",
+    "pkg/v1/remote/transport",
+    "pkg/v1/tarball",
+    "pkg/v1/types",
+    "pkg/v1/v1util",
+  ]
+  pruneopts = "UT"
+  revision = "11085b1805b9e9e6987278a5f61202d088e9b7f0"
+
+[[projects]]
+  digest = "1:40e195917a951a8bf867cd05de2a46aaf1806c50cf92eebf4c16f78cd196f747"
+  name = "github.com/pkg/errors"
+  packages = ["."]
+  pruneopts = "UT"
+  revision = "645ef00459ed84a119197bfb8d8205042c6df63d"
+  version = "v0.8.0"
+
+[[projects]]
   branch = "master"
+  digest = "1:f64e3b947c2d78c39c692d65a0c44b92bf549f48ba8fa835c1a43fcfc84a4285"
   name = "github.com/sclevine/spec"
   packages = [
     ".",
-    "report"
+    "report",
   ]
+  pruneopts = "UT"
   revision = "a925ac4bfbc9e5770f1239042559a18443f4d84b"
 
 [[projects]]
   branch = "master"
+  digest = "1:6fa08649c5b3bd0f090898aff37a4bd024c7d599d61cc3c76fed66a322d8bf13"
   name = "golang.org/x/net"
-  packages = ["context"]
-  revision = "db08ff08e8622530d9ed3a0e8ac279f6d4c02196"
+  packages = [
+    "context",
+    "context/ctxhttp",
+    "internal/socks",
+    "proxy",
+  ]
+  pruneopts = "UT"
+  revision = "d0887baf81f4598189d4e12a37c6da86f0bba4d0"
+
+[[projects]]
+  branch = "master"
+  digest = "1:03995e72a11fa1c5228133b9cd474715dd1966e8cb54b67bc097caa877e43689"
+  name = "golang.org/x/sys"
+  packages = ["windows"]
+  pruneopts = "UT"
+  revision = "ac767d655b305d4e9612f5f6e33120b9176c4ad4"
 
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "c682c8df5d11cb56451f8e6e5b9fdb422ec2588b774300c483815ec21ae7bbc8"
+  input-imports = [
+    "github.com/BurntSushi/toml",
+    "github.com/buildpack/packs",
+    "github.com/buildpack/packs/img",
+    "github.com/golang/mock/gomock",
+    "github.com/google/go-containerregistry/pkg/v1",
+    "github.com/google/go-containerregistry/pkg/v1/mutate",
+    "github.com/sclevine/spec",
+    "github.com/sclevine/spec/report",
+  ]
   solver-name = "gps-cdcl"
   solver-version = 1
