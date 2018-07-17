@@ -69,7 +69,7 @@ func analyzer() error {
 		Err:        os.Stderr,
 	}
 	err = analyzer.Analyze(
-		lifecycle.DefaultLaunchDir,
+		launchDir,
 		origImage,
 	)
 	if err != nil {
