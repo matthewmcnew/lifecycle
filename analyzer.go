@@ -12,9 +12,9 @@ import (
 )
 
 type Analyzer struct {
-	// Buildpacks  []*Buildpack
-	In       []byte
-	Out, Err io.Writer
+	Buildpacks []string
+	In         []byte
+	Out, Err   io.Writer
 }
 
 func (a *Analyzer) Analyze(launchDir string, image v1.Image) error {
@@ -27,18 +27,20 @@ func (a *Analyzer) Analyze(launchDir string, image v1.Image) error {
 	}
 
 	for _, buildpack := range config.Buildpacks {
-		for name, metadata := range buildpack.Layers {
-			path := filepath.Join(launchDir, buildpack.Key)
-			if err := os.MkdirAll(path, 0755); err != nil {
-				return packs.FailErr(err, "create directory buildpack", buildpack.Key)
-			}
-			fh, err := os.Create(filepath.Join(path, name+".toml"))
-			if err != nil {
-				return packs.FailErr(err, "create buildpack layer toml file", buildpack.Key, name)
-			}
-			defer fh.Close()
-			if err := toml.NewEncoder(fh).Encode(metadata.Data); err != nil {
-				return packs.FailErr(err, "marshal buildpack layer toml file", buildpack.Key, name)
+		if a.hasBuildpack(buildpack.Key) {
+			for name, metadata := range buildpack.Layers {
+				path := filepath.Join(launchDir, buildpack.Key)
+				if err := os.MkdirAll(path, 0755); err != nil {
+					return packs.FailErr(err, "create directory buildpack", buildpack.Key)
+				}
+				fh, err := os.Create(filepath.Join(path, name+".toml"))
+				if err != nil {
+					return packs.FailErr(err, "create buildpack layer toml file", buildpack.Key, name)
+				}
+				defer fh.Close()
+				if err := toml.NewEncoder(fh).Encode(metadata.Data); err != nil {
+					return packs.FailErr(err, "marshal buildpack layer toml file", buildpack.Key, name)
+				}
 			}
 		}
 	}
@@ -62,4 +64,13 @@ func (a *Analyzer) getBuildMetadata(image v1.Image) (packs.BuildMetadata, error)
 	}
 
 	return config, err
+}
+
+func (a *Analyzer) hasBuildpack(id string) bool {
+	for _, buildpack := range a.Buildpacks {
+		if id == buildpack {
+			return true
+		}
+	}
+	return false
 }

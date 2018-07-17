@@ -44,12 +44,9 @@ func testAnalyzer(t *testing.T, when spec.G, it spec.S) {
 
 		stdout, stderr = &bytes.Buffer{}, &bytes.Buffer{}
 		analyzer = &lifecycle.Analyzer{
-			// Buildpacks: []*lifecycle.Buildpack{
-			// 	{ID: "buildpack1-id", Dir: buildpackDir},
-			// 	{ID: "buildpack2-id", Dir: buildpackDir},
-			// },
-			Out: io.MultiWriter(stdout, it.Out()),
-			Err: io.MultiWriter(stderr, it.Out()),
+			Buildpacks: []string{"buildpack.node", "buildpack.go"},
+			Out:        io.MultiWriter(stdout, it.Out()),
+			Err:        io.MultiWriter(stderr, it.Out()),
 		}
 	})
 
@@ -87,6 +84,7 @@ func testAnalyzer(t *testing.T, when spec.G, it spec.S) {
 				}`}
 				image.EXPECT().ConfigFile().Return(configFile, nil)
 			})
+
 			it("uses labels to populate the launch dir", func() {
 				if err := analyzer.Analyze(launchDir, image); err != nil {
 					t.Fatalf("Error: %s\n", err)
@@ -105,21 +103,24 @@ func testAnalyzer(t *testing.T, when spec.G, it spec.S) {
 				if txt, err := ioutil.ReadFile(filepath.Join(launchDir, "buildpack.go", "go.toml")); err != nil {
 					t.Fatalf("Error: %s\n", err)
 				} else if string(txt) != `version = "1.10"`+"\n" {
-					t.Fatalf(`Error: expected "%s" to be toml encoded node_modules.toml`, txt)
+					t.Fatalf(`Error: expected "%s" to be toml encoded go.toml`, txt)
 				}
 			})
 		})
+
 		when("image exists but is missing config", func() {
 			it.Before(func() {
 				var configFile = &v1.ConfigFile{}
 				image.EXPECT().ConfigFile().Return(configFile, nil)
 			})
+
 			it("does nothing and succeeds", func() {
 				if err := analyzer.Analyze(launchDir, image); err != nil {
 					t.Fatalf("Error: %s\n", err)
 				}
 			})
 		})
+
 		when("image is nil", func() {
 			it("does nothing and succeeds", func() {
 				if err := analyzer.Analyze(launchDir, nil); err != nil {
@@ -127,14 +128,50 @@ func testAnalyzer(t *testing.T, when spec.G, it spec.S) {
 				}
 			})
 		})
+
+		when("image has buildpacks that won't be run", func() {
+			it.Before(func() {
+				var configFile = &v1.ConfigFile{}
+				configFile.Config.Labels = map[string]string{packs.BuildLabel: `{
+					"buildpacks": [
+						{
+							"key": "buildpack.node",
+							"layers": {
+								"node_modules": {
+									"data": {"version": "1234"}
+								}
+							}
+						},
+						{
+							"key": "buildpack.go",
+							"layers": {
+								"go": {
+									"data": {"version": "1.10"}
+								}
+							}
+						}
+					]
+				}`}
+				image.EXPECT().ConfigFile().Return(configFile, nil)
+			})
+
+			it("only writes layer toml files that correspond to detected buildpacks", func() {
+				analyzer.Buildpacks = []string{"buildpack.go"}
+
+				if err := analyzer.Analyze(launchDir, image); err != nil {
+					t.Fatalf("Error: %s\n", err)
+				}
+
+				if txt, err := ioutil.ReadFile(filepath.Join(launchDir, "buildpack.go", "go.toml")); err != nil {
+					t.Fatalf("Error: %s\n", err)
+				} else if string(txt) != `version = "1.10"`+"\n" {
+					t.Fatalf(`Error: expected "%s" to be toml encoded go.toml`, txt)
+				}
+
+				if _, err := os.Stat(filepath.Join(launchDir, "buildpack.node")); !os.IsNotExist(err) {
+					t.Fatalf(`Error: expected /launch/buildpack.node to not exist`)
+				}
+			})
+		})
 	})
 }
-
-// func testExists(t *testing.T, paths ...string) {
-// 	t.Helper()
-// 	for _, p := range paths {
-// 		if _, err := os.Stat(p); err != nil {
-// 			t.Fatalf("Error: %s\n", err)
-// 		}
-// 	}
-// }

@@ -11,26 +11,22 @@ import (
 
 var (
 	repoName   string
-	stackName  string
 	useDaemon  bool
 	useHelpers bool
 	launchDir  string
-	appDir     string
 )
 
 func init() {
-	packs.InputStackName(&stackName)
 	packs.InputUseDaemon(&useDaemon)
 	packs.InputUseHelpers(&useHelpers)
 
 	flag.StringVar(&launchDir, "launch", "/launch", "launch directory")
-	flag.StringVar(&appDir, "app", "/launch/app", "app directory")
 }
 
 func main() {
 	flag.Parse()
 	repoName = flag.Arg(0)
-	if flag.NArg() > 1 || repoName == "" || stackName == "" || launchDir == "" || appDir == "" {
+	if flag.NArg() > 1 || repoName == "" || launchDir == "" {
 		packs.Exit(packs.FailCode(packs.CodeInvalidArgs, "parse arguments"))
 	}
 	packs.Exit(analyzer())
@@ -38,7 +34,7 @@ func main() {
 
 func analyzer() error {
 	if useHelpers {
-		if err := img.SetupCredHelpers(repoName, stackName); err != nil {
+		if err := img.SetupCredHelpers(repoName); err != nil {
 			return packs.FailErr(err, "setup credential helpers")
 		}
 	}
