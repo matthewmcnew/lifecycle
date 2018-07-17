@@ -4,6 +4,7 @@ import (
 	"flag"
 	"os"
 
+	"github.com/BurntSushi/toml"
 	"github.com/buildpack/lifecycle"
 	"github.com/buildpack/packs"
 	"github.com/buildpack/packs/img"
@@ -13,10 +14,12 @@ var (
 	repoName   string
 	useDaemon  bool
 	useHelpers bool
+	groupPath  string
 	launchDir  string
 )
 
 func init() {
+	packs.InputBPGroupPath(&groupPath)
 	packs.InputUseDaemon(&useDaemon)
 	packs.InputUseHelpers(&useHelpers)
 
@@ -39,6 +42,13 @@ func analyzer() error {
 		}
 	}
 
+	var group struct {
+		Buildpacks []string
+	}
+	if _, err := toml.DecodeFile(groupPath, &group); err != nil {
+		return packs.FailErr(err, "read group")
+	}
+
 	newRepoStore := img.NewRegistry
 	if useDaemon {
 		newRepoStore = img.NewDaemon
@@ -54,10 +64,9 @@ func analyzer() error {
 	}
 
 	analyzer := &lifecycle.Analyzer{
-		// TODO we probably need this so that we can choose to NOT create toml files for buildpacks we aren't using
-		// Buildpacks: buildpacks.FromList(group.Buildpacks),
-		Out: os.Stdout,
-		Err: os.Stderr,
+		Buildpacks: group.Buildpacks,
+		Out:        os.Stdout,
+		Err:        os.Stderr,
 	}
 	err = analyzer.Analyze(
 		lifecycle.DefaultLaunchDir,

@@ -44,7 +44,7 @@ func testAnalyzer(t *testing.T, when spec.G, it spec.S) {
 
 		stdout, stderr = &bytes.Buffer{}, &bytes.Buffer{}
 		analyzer = &lifecycle.Analyzer{
-			Buildpacks: []string{"buildpack.node", "buildpack.go"},
+			Buildpacks: []string{"buildpack.node@1.0.0", "buildpack.go"},
 			Out:        io.MultiWriter(stdout, it.Out()),
 			Err:        io.MultiWriter(stderr, it.Out()),
 		}
