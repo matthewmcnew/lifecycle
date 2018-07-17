@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 
@@ -64,7 +65,7 @@ func export() error {
 		return packs.FailErr(err, "access", repoName)
 	}
 
-	// fmt.Println("=== read stack")
+	fmt.Println("=== read stack")
 	stackStore, err := img.NewRegistry(stackName)
 	if err != nil {
 		return packs.FailErr(err, "access", stackName)
@@ -76,7 +77,7 @@ func export() error {
 
 	var origImage v1.Image
 	if prevName != "" {
-		// fmt.Println("=== read previous image", prevName)
+		fmt.Println("=== read previous image", prevName)
 		store, err := newRepoStore(prevName)
 		if err != nil {
 			return packs.FailErr(err, "access", prevName)
@@ -87,16 +88,18 @@ func export() error {
 		}
 	}
 
-	// fmt.Println("=== create temp dir")
+	fmt.Println("=== create temp dir")
 	tmpDir, err := ioutil.TempDir("", "pack.export.layer")
 	if err != nil {
 		return packs.FailErr(err, "create temp directory")
 	}
 	defer os.RemoveAll(tmpDir)
 
-	// fmt.Println("=== add app as layer")
+	fmt.Println("=== add app as layer")
 	tarFile := filepath.Join(tmpDir, "app.tgz")
-	if _, err := packs.Run("tar", "-czf", tarFile, appDir); err != nil {
+	args := []string{"-czf", tarFile, fmt.Sprintf("--transform=s,%s,launch/app,", strings.TrimPrefix(appDir, "/")), appDir}
+	fmt.Println("tar", args)
+	if _, err := packs.Run("tar", args...); err != nil {
 		return packs.FailErr(err, "tar", appDir, "to", tarFile)
 	}
 	repoImage, _, err := img.Append(stackImage, tarFile)
@@ -104,7 +107,13 @@ func export() error {
 		return packs.FailErr(err, "append droplet to", stackName)
 	}
 
-	// fmt.Println("=== add other layers")
+	// TODO: remove below line
+	cmd := exec.Command("tar", "tf", tarFile)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	cmd.Run()
+
+	fmt.Println("=== add other layers")
 	repoImage, err = addBuildpackLayers(tmpDir, repoImage, origImage)
 	if err != nil {
 		return packs.FailErr(err, "append layers")
@@ -120,7 +129,7 @@ func export() error {
 		return packs.FailErr(err, "set start command")
 	}
 
-	// fmt.Println("=== write image", repoName)
+	fmt.Println("=== write image", repoName)
 	if err := repoStore.Write(repoImage); err != nil {
 		return packs.FailErrCode(err, packs.CodeFailedUpdate, "write", repoName)
 	}
@@ -138,6 +147,7 @@ func StartCommand(image v1.Image, cmd ...string) (v1.Image, error) {
 	return mutate.Config(image, config)
 }
 
+// TODO delete these once this is inside lifecycle proper
 type Process struct {
 	Type    string `toml:"type"`
 	Command string `toml:"command"`
@@ -179,7 +189,7 @@ func addBuildpackLayers(tmpDir string, repoImage v1.Image, origImage v1.Image) (
 			}
 			dir := filepath.Join(launchDir, id.Name(), layer.Name())
 			tarFile := filepath.Join(tmpDir, fmt.Sprintf("layer.%s.%s.tgz", id.Name(), layer.Name()))
-			if _, err := packs.Run("tar", "-czf", tarFile, dir); err != nil {
+			if _, err := packs.Run("tar", "-czf", tarFile, fmt.Sprintf("--transform=s,%s,launch/%s/%s,", strings.TrimPrefix(dir, "/"), id.Name(), layer.Name()), dir); err != nil {
 				return nil, packs.FailErr(err, "tar", appDir, "to", tarFile)
 			}
 			var topLayer v1.Layer

@@ -9,39 +9,35 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/sclevine/spec"
 	"github.com/sclevine/spec/report"
 )
 
 func Test(t *testing.T) {
-	_, cleanupFunc := buildExporter()
+	rand.Seed(time.Now().UTC().UnixNano())
+	compiledPath, cleanupFunc := buildExporter()
 	defer cleanupFunc()
 
 	spec.Run(t, "exporter", func(t *testing.T, when spec.G, it spec.S) {
-		it.Before(func() {
-			if out, err := exec.Command("docker", "build", "-t", "packs/v3:export_test", "-f", "Dockerfile", "../..").CombinedOutput(); err != nil {
-				fmt.Println(string(out))
-				t.Fatalf("building exporter: %s", err)
-			}
-		})
-
 		when("a simple launch dir exists", func() {
 			var imgName string
 			it.Before(func() {
-				imgName = "myorg/" + RandStringBytes(8)
-				// fmt.Println("IMGNAME:", imgName)
-				if err := runExport("fixtures/first/launch", "packs/v3:run", imgName+":v1"); err != nil {
+				imgName = "myorg/" + RandString(8)
+				fmt.Println("IMGNAME:", imgName)
+				if err := runExport(compiledPath, "fixtures/first/launch", "packs/v3:run", imgName+":v1"); err != nil {
 					t.Fatal(err)
 				}
 			})
-			it.After(func() {
-				deleteImg(imgName + ":v1")
-			})
+			// it.After(func() {
+			// 	deleteImg(imgName + ":v1")
+			// })
 
 			it("creates a runnable image", func() {
 				out, err := exec.Command("docker", "run", imgName+":v1").CombinedOutput()
 				if err != nil {
+					fmt.Println(string(out))
 					t.Fatal(err)
 				}
 				if !strings.Contains(string(out), "text from layer 1") {
@@ -74,7 +70,7 @@ func Test(t *testing.T) {
 
 			when("rebuilding when toml exists without directory", func() {
 				it.Before(func() {
-					if err := runExport("fixtures/second/launch", "packs/v3:run", imgName+":v2", imgName+":v1"); err != nil {
+					if err := runExport(compiledPath, "fixtures/second/launch", "packs/v3:run", imgName+":v2", imgName+":v1"); err != nil {
 						t.Fatal(err)
 					}
 				})
@@ -99,23 +95,18 @@ func Test(t *testing.T) {
 	}, spec.Parallel(), spec.Report(report.Terminal{}))
 }
 
-func runExport(launchDir, stackName string, imgNames ...string) error {
+func runExport(compiledPath, launchDir, stackName string, imgNames ...string) error {
 	launchDir, err := filepath.Abs(launchDir)
 	if err != nil {
 		return err
 	}
-	args := append([]string{
-		"run", "-w", "/launch/app",
-		"--user", "0",
-		"-v", "/var/run/docker.sock:/var/run/docker.sock",
-		"-v", launchDir + ":/launch",
-		"packs/v3:export_test",
-		"-daemon",
-		"-stack", stackName,
-	}, imgNames...)
-	if out, err := exec.Command("docker", args...).CombinedOutput(); err != nil {
-		fmt.Println(string(out))
-		return fmt.Errorf("run exporter: %s", err)
+	args := append([]string{"-daemon", "-launch", launchDir, "-app", filepath.Join(launchDir, "app"), "-stack", stackName}, imgNames...)
+	fmt.Println(compiledPath, args)
+	cmd := exec.Command(compiledPath, args...)
+	cmd.Dir = filepath.Join(launchDir, "app")
+	if out, err := cmd.CombinedOutput(); err != nil {
+		fmt.Println("OUT:", string(out))
+		return fmt.Errorf("run analyzer: %s", err)
 	}
 	return nil
 }
@@ -144,12 +135,10 @@ func buildExporter() (string, func()) {
 	return path, func() { os.RemoveAll(tmpDir) }
 }
 
-const letterBytes = "abcdefghijklmnopqrstuvwxyz"
-
-func RandStringBytes(n int) string {
+func RandString(n int) string {
 	b := make([]byte, n)
 	for i := range b {
-		b[i] = letterBytes[rand.Intn(len(letterBytes))]
+		b[i] = 'a' + byte(rand.Intn(26))
 	}
 	return string(b)
 }

@@ -67,10 +67,13 @@ func createImg(imgName string) error {
 		return err
 	}
 	defer os.RemoveAll(tmpDir)
+	if err := ioutil.WriteFile(filepath.Join(tmpDir, "emptyfile"), []byte(""), 0644); err != nil {
+		return err
+	}
 	if err := ioutil.WriteFile(filepath.Join(tmpDir, "Dockerfile"), []byte(`
 		FROM scratch
 		LABEL sh.packs.build '{"buildpacks":[{"key":"buildpack.node","layers":{"nodejs":{"data":{"version":"1.2.3"}}}}]}'
-		COPY Dockerfile /
+		COPY emptyfile /
 	`), 0644); err != nil {
 		return err
 	}
