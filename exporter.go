@@ -53,7 +53,8 @@ func (e *Exporter) Export(launchDir, appDir string, stackImage, origImage v1.Ima
 	if err != nil {
 		return packs.FailErr(err, "read web command from metadata")
 	}
-	repoImage, err = e.startCommand(repoImage, "/packs/launcher", webCommand)
+	// TODO should below be startCommand(repoImage, "/packs/launcher", webCommand)
+	repoImage, err = e.startCommand(repoImage, webCommand)
 	if err != nil {
 		return packs.FailErr(err, "set start command")
 	}

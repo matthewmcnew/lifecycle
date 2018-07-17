@@ -25,7 +25,7 @@ func Test(t *testing.T) {
 			var imgName, tmpDir string
 			it.Before(func() {
 				imgName = RandString(8)
-				err := createImg(imgName)
+				err := createPreviousImg(imgName)
 				if err != nil {
 					t.Fatal("create previous image", err)
 				}
@@ -61,7 +61,7 @@ func Test(t *testing.T) {
 	}, spec.Parallel(), spec.Report(report.Terminal{}))
 }
 
-func createImg(imgName string) error {
+func createPreviousImg(imgName string) error {
 	tmpDir, err := ioutil.TempDir("", "lifecycle.analyzer.dockerfile.")
 	if err != nil {
 		return err
