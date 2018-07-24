@@ -22,7 +22,12 @@ type Exporter struct {
 	Out, Err io.Writer
 }
 
-func (e *Exporter) Export(launchDir, appDir string, stackImage, origImage v1.Image, repoStore img.Store) error {
+func (e *Exporter) Export(launchDir, appDir string, stackImage v1.Image, repoStore img.Store) error {
+	origImage, err := repoStore.Image()
+	if err != nil {
+		origImage = nil
+	}
+
 	fmt.Println("=== create temp dir")
 	tmpDir, err := ioutil.TempDir("", "pack.export.layer")
 	if err != nil {

@@ -30,9 +30,9 @@ func Test(t *testing.T) {
 					t.Fatal(err)
 				}
 			})
-			// it.After(func() {
-			// 	deleteImg(imgName + ":v1")
-			// })
+			it.After(func() {
+				deleteImg(imgName + ":v1")
+			})
 
 			it("creates a runnable image", func() {
 				out, err := exec.Command("docker", "run", imgName+":v1").CombinedOutput()
