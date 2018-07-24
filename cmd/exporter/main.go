@@ -2,10 +2,7 @@ package main
 
 import (
 	"flag"
-	"fmt"
 	"os"
-
-	"github.com/google/go-containerregistry/pkg/v1"
 
 	"github.com/buildpack/lifecycle"
 	"github.com/buildpack/packs"
@@ -14,7 +11,6 @@ import (
 
 var (
 	repoName   string
-	prevName   string
 	stackName  string
 	useDaemon  bool
 	useHelpers bool
@@ -54,27 +50,13 @@ func export() error {
 		return packs.FailErr(err, "access", repoName)
 	}
 
-	fmt.Println("=== read stack")
-	stackStore, err := img.NewRegistry(stackName)
+	stackStore, err := img.NewRegistry(stackName + ":run")
 	if err != nil {
-		return packs.FailErr(err, "access", stackName)
+		return packs.FailErr(err, "access", stackName+":run")
 	}
 	stackImage, err := stackStore.Image()
 	if err != nil {
-		return packs.FailErr(err, "get image for", stackName)
-	}
-
-	var origImage v1.Image
-	if prevName != "" {
-		fmt.Println("=== read previous image", prevName)
-		store, err := newRepoStore(prevName)
-		if err != nil {
-			return packs.FailErr(err, "access", prevName)
-		}
-		origImage, err = store.Image()
-		if err != nil {
-			return packs.FailErr(err, "get image for", prevName)
-		}
+		return packs.FailErr(err, "get image for", stackName+":run")
 	}
 
 	exporter := &lifecycle.Exporter{
@@ -84,7 +66,6 @@ func export() error {
 	err = exporter.Export(
 		launchDir,
 		stackImage,
-		origImage,
 		repoStore,
 	)
 	if err != nil {

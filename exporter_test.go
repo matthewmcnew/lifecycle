@@ -57,7 +57,7 @@ func testExporter(t *testing.T, when spec.G, it spec.S) {
 					t.Fatal("repo store", imgName, err)
 				}
 
-				if err := exporter.Export("cmd/exporter/fixtures/first/launch", stackImage, repoStore); err != nil {
+				if err := exporter.Export("testdata/exporter/first/launch", stackImage, repoStore); err != nil {
 					t.Fatalf("Error: %s\n", err)
 				}
 			})
@@ -101,7 +101,7 @@ func testExporter(t *testing.T, when spec.G, it spec.S) {
 
 			when("rebuilding when toml exists without directory", func() {
 				it.Before(func() {
-					if err := exporter.Export("cmd/exporter/fixtures/second/launch", stackImage, repoStore); err != nil {
+					if err := exporter.Export("testdata/exporter/second/launch", stackImage, repoStore); err != nil {
 						t.Fatalf("Error: %s\n", err)
 					}
 				})
