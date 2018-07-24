@@ -59,17 +59,27 @@ func export() error {
 		return packs.FailErr(err, "get image for", stackName+":run")
 	}
 
+	origImage, err := repoStore.Image()
+	if err != nil {
+		origImage = nil
+	}
+
 	exporter := &lifecycle.Exporter{
 		Out: os.Stdout,
 		Err: os.Stderr,
 	}
-	err = exporter.Export(
+	newImage, err = exporter.Export(
 		launchDir,
 		stackImage,
-		repoStore,
+		origImage,
 	)
 	if err != nil {
 		return packs.FailErrCode(err, packs.CodeFailedBuild)
 	}
+
+	if err := repoStore.Write(newImage); err != nil {
+		return packs.FailErrCode(err, packs.CodeFailedUpdate, "write")
+	}
+
 	return nil
 }

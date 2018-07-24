@@ -24,47 +24,39 @@ type Exporter struct {
 	Out, Err io.Writer
 }
 
-func (e *Exporter) Export(launchDir string, stackImage v1.Image, repoStore img.Store) error {
-	origImage, err := repoStore.Image()
-	if err != nil {
-		origImage = nil
-	}
-
+func (e *Exporter) Export(launchDir string, stackImage, origImage v1.Image) (v1.Image, error) {
 	tmpDir, err := ioutil.TempDir("", "pack.export.layer")
 	if err != nil {
-		return packs.FailErr(err, "create temp directory")
+		return nil, packs.FailErr(err, "create temp directory")
 	}
 	defer os.RemoveAll(tmpDir)
 
 	tarFile := filepath.Join(tmpDir, "app.tgz")
 	if err := e.createTarFile(tarFile, filepath.Join(launchDir, "app"), "launch/app"); err != nil {
-		return packs.FailErr(err, "tar", filepath.Join(launchDir, "app"), "to", tarFile)
+		return nil, packs.FailErr(err, "tar", filepath.Join(launchDir, "app"), "to", tarFile)
 	}
 	repoImage, _, err := img.Append(stackImage, tarFile)
 	if err != nil {
-		return packs.FailErr(err, "append droplet to stack")
+		return nil, packs.FailErr(err, "append droplet to stack")
 	}
 
 	repoImage, err = e.addBuildpackLayers(tmpDir, launchDir, repoImage, origImage)
 	if err != nil {
-		return packs.FailErr(err, "append layers")
+		return nil, packs.FailErr(err, "append layers")
 	}
 
 	// TODO: This appears to be the correct answer. Is it?
 	webCommand, err := e.webCommand(filepath.Join(launchDir, "app", "metadata.toml"))
 	if err != nil {
-		return packs.FailErr(err, "read web command from metadata")
+		return nil, packs.FailErr(err, "read web command from metadata")
 	}
 	// TODO should below be startCommand(repoImage, "/packs/launcher", webCommand)
 	repoImage, err = e.startCommand(repoImage, webCommand)
 	if err != nil {
-		return packs.FailErr(err, "set start command")
+		return nil, packs.FailErr(err, "set start command")
 	}
 
-	if err := repoStore.Write(repoImage); err != nil {
-		return packs.FailErrCode(err, packs.CodeFailedUpdate, "write")
-	}
-	return nil
+	return repoImage, nil
 }
 
 // TODO move this back to lib (somehow)
