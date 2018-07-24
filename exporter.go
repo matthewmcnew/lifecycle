@@ -1,6 +1,8 @@
 package lifecycle
 
 import (
+	"archive/tar"
+	"compress/gzip"
 	"errors"
 	"fmt"
 	"io"
@@ -35,8 +37,7 @@ func (e *Exporter) Export(launchDir, appDir string, stackImage v1.Image, repoSto
 	defer os.RemoveAll(tmpDir)
 
 	tarFile := filepath.Join(tmpDir, "app.tgz")
-	args := []string{"-czf", tarFile, fmt.Sprintf("--transform=s,%s,launch/app,", strings.TrimPrefix(appDir, "/")), appDir}
-	if _, err := packs.Run("tar", args...); err != nil {
+	if err := e.createTarFile(tarFile, appDir, "launch/app"); err != nil {
 		return packs.FailErr(err, "tar", appDir, "to", tarFile)
 	}
 	repoImage, _, err := img.Append(stackImage, tarFile)
@@ -109,7 +110,7 @@ func (e *Exporter) addBuildpackLayers(tmpDir, launchDir string, repoImage v1.Ima
 			}
 			dir := filepath.Join(launchDir, id.Name(), layer.Name())
 			tarFile := filepath.Join(tmpDir, fmt.Sprintf("layer.%s.%s.tgz", id.Name(), layer.Name()))
-			if _, err := packs.Run("tar", "-czf", tarFile, fmt.Sprintf("--transform=s,%s,launch/%s/%s,", strings.TrimPrefix(dir, "/"), id.Name(), layer.Name()), dir); err != nil {
+			if err := e.createTarFile(tarFile, dir, filepath.Join("launch", id.Name(), layer.Name())); err != nil {
 				return nil, packs.FailErr(err, "tar", dir, "to", tarFile)
 			}
 			var topLayer v1.Layer
@@ -192,4 +193,48 @@ func (e *Exporter) addBuildpackLayers(tmpDir, launchDir string, repoImage v1.Ima
 		}
 	}
 	return repoImage, nil
+}
+
+func (e *Exporter) createTarFile(tarFile, fsDir, tarDir string) error {
+	fh, err := os.Create(tarFile)
+	if err != nil {
+		return fmt.Errorf("create file for tar: %s", err)
+	}
+	defer fh.Close()
+	gzw := gzip.NewWriter(fh)
+	defer gzw.Close()
+	tw := tar.NewWriter(gzw)
+	defer tw.Close()
+
+	return filepath.Walk(fsDir, func(file string, fi os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		if fi.Mode().IsDir() {
+			return nil
+		}
+		relPath, err := filepath.Rel(fsDir, file)
+		if err != nil {
+			return err
+		}
+		header, err := tar.FileInfoHeader(fi, fi.Name())
+		if err != nil {
+			return err
+		}
+		header.Name = filepath.Join(tarDir, relPath)
+
+		if err := tw.WriteHeader(header); err != nil {
+			return err
+		}
+		f, err := os.Open(file)
+		if err != nil {
+			return err
+		}
+		if _, err := io.Copy(tw, f); err != nil {
+			return err
+		}
+		return f.Close()
+	})
+
+	return nil
 }

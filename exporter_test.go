@@ -106,7 +106,7 @@ func testExporter(t *testing.T, when spec.G, it spec.S) {
 					}
 				})
 
-				it.Focus("reuses layers if there is a layer.toml file", func() {
+				it("reuses layers if there is a layer.toml file", func() {
 					out, err := exec.Command("docker", "run", "-w", "/launch/app", imgName).CombinedOutput()
 					if err != nil {
 						fmt.Println(string(out))
