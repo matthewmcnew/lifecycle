@@ -2,6 +2,7 @@ package lifecycle_test
 
 import (
 	"bytes"
+	"fmt"
 	"io"
 	"os/exec"
 	"strings"
@@ -11,6 +12,8 @@ import (
 	"github.com/buildpack/lifecycle/testmock"
 	"github.com/buildpack/packs/img"
 	"github.com/golang/mock/gomock"
+	"github.com/google/go-containerregistry/pkg/v1"
+	"github.com/google/go-containerregistry/pkg/v1/mutate"
 	"github.com/sclevine/spec"
 	"github.com/sclevine/spec/report"
 )
@@ -45,15 +48,12 @@ func testExporter(t *testing.T, when spec.G, it spec.S) {
 	when("#Export", func() {
 		when("a simple launch dir exists", func() {
 			it("creates a runnable image", func() {
-				stackStore, err := img.NewRegistry("busybox")
+				stackImage, err := GetBusyboxWithEntrypoint()
 				if err != nil {
-					t.Fatalf("get store for SCRATCH: %s", err)
+					t.Fatalf("get busybox image for stack: %s", err)
 				}
-				stackImage, err := stackStore.Image()
-				if err != nil {
-					t.Fatalf("get image for SCRATCH: %s", err)
-				}
-				repoName := "testwithrandomness"
+
+				repoName := "testwithrandomness2"
 				repoStore, err := img.NewDaemon(repoName)
 				if err != nil {
 					t.Fatal("repo store", repoName, err)
@@ -63,6 +63,7 @@ func testExporter(t *testing.T, when spec.G, it spec.S) {
 					t.Fatalf("Error: %s\n", err)
 				}
 
+				fmt.Println("docker", "run", "-w", "/launch/app", repoName)
 				out, err := exec.Command("docker", "run", "-w", "/launch/app", repoName).CombinedOutput()
 				if err != nil {
 					t.Fatalf("Error: %s\n", err)
@@ -121,4 +122,24 @@ func testExporter(t *testing.T, when spec.G, it spec.S) {
 			// })
 		})
 	}, spec.Parallel(), spec.Report(report.Terminal{}))
+}
+
+func GetBusyboxWithEntrypoint() (v1.Image, error) {
+	stackStore, err := img.NewRegistry("busybox")
+	if err != nil {
+		return nil, fmt.Errorf("get store for busybox: %s", err)
+	}
+	stackImage, err := stackStore.Image()
+	if err != nil {
+		return nil, fmt.Errorf("get image for SCRATCH: %s", err)
+	}
+	configFile, err := stackImage.ConfigFile()
+	if err != nil {
+		return nil, err
+	}
+	config := *configFile.Config.DeepCopy()
+	config.Entrypoint = []string{"sh", "-c"}
+	// TODO: Should we set working directory? It helps with unit tests
+	// config.WorkingDir = appDir
+	return mutate.Config(stackImage, config)
 }
