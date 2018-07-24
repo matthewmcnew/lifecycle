@@ -19,7 +19,6 @@ var (
 	useDaemon  bool
 	useHelpers bool
 	launchDir  string
-	appDir     string
 )
 
 func init() {
@@ -28,18 +27,14 @@ func init() {
 	packs.InputUseHelpers(&useHelpers)
 
 	flag.StringVar(&launchDir, "launch", "/launch", "launch directory")
-	flag.StringVar(&appDir, "app", "/launch/app", "app directory")
 }
 
 func main() {
 	flag.Parse()
-	repoName = flag.Arg(0)
-	if flag.NArg() >= 2 {
-		prevName = flag.Arg(1)
-	}
-	if flag.NArg() > 2 || repoName == "" || stackName == "" || launchDir == "" || appDir == "" {
+	if flag.NArg() > 1 || flag.Arg(0) == "" || stackName == "" || launchDir == "" {
 		packs.Exit(packs.FailCode(packs.CodeInvalidArgs, "parse arguments"))
 	}
+	repoName = flag.Arg(0)
 	packs.Exit(export())
 }
 
@@ -88,7 +83,6 @@ func export() error {
 	}
 	err = exporter.Export(
 		launchDir,
-		appDir,
 		stackImage,
 		origImage,
 		repoStore,

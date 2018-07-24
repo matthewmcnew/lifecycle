@@ -24,7 +24,7 @@ type Exporter struct {
 	Out, Err io.Writer
 }
 
-func (e *Exporter) Export(launchDir, appDir string, stackImage v1.Image, repoStore img.Store) error {
+func (e *Exporter) Export(launchDir string, stackImage v1.Image, repoStore img.Store) error {
 	origImage, err := repoStore.Image()
 	if err != nil {
 		origImage = nil
@@ -37,8 +37,8 @@ func (e *Exporter) Export(launchDir, appDir string, stackImage v1.Image, repoSto
 	defer os.RemoveAll(tmpDir)
 
 	tarFile := filepath.Join(tmpDir, "app.tgz")
-	if err := e.createTarFile(tarFile, appDir, "launch/app"); err != nil {
-		return packs.FailErr(err, "tar", appDir, "to", tarFile)
+	if err := e.createTarFile(tarFile, filepath.Join(launchDir, "app"), "launch/app"); err != nil {
+		return packs.FailErr(err, "tar", filepath.Join(launchDir, "app"), "to", tarFile)
 	}
 	repoImage, _, err := img.Append(stackImage, tarFile)
 	if err != nil {
@@ -51,7 +51,7 @@ func (e *Exporter) Export(launchDir, appDir string, stackImage v1.Image, repoSto
 	}
 
 	// TODO: This appears to be the correct answer. Is it?
-	webCommand, err := e.webCommand(filepath.Join(appDir, "metadata.toml"))
+	webCommand, err := e.webCommand(filepath.Join(launchDir, "app", "metadata.toml"))
 	if err != nil {
 		return packs.FailErr(err, "read web command from metadata")
 	}
@@ -97,6 +97,7 @@ func (e *Exporter) addBuildpackLayers(tmpDir, launchDir string, repoImage v1.Ima
 		return nil, err
 	}
 	for _, id := range ids {
+		// TODO should this be iterating over buildpack ids, instead of launchDir entries??
 		if id.Name() == "app" || !id.IsDir() {
 			continue
 		}
