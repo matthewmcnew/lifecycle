@@ -28,17 +28,14 @@ func (e *Exporter) Export(launchDir, appDir string, stackImage v1.Image, repoSto
 		origImage = nil
 	}
 
-	fmt.Println("=== create temp dir")
 	tmpDir, err := ioutil.TempDir("", "pack.export.layer")
 	if err != nil {
 		return packs.FailErr(err, "create temp directory")
 	}
 	defer os.RemoveAll(tmpDir)
 
-	fmt.Println("=== add app as layer")
 	tarFile := filepath.Join(tmpDir, "app.tgz")
 	args := []string{"-czf", tarFile, fmt.Sprintf("--transform=s,%s,launch/app,", strings.TrimPrefix(appDir, "/")), appDir}
-	fmt.Println("tar", args)
 	if _, err := packs.Run("tar", args...); err != nil {
 		return packs.FailErr(err, "tar", appDir, "to", tarFile)
 	}
@@ -47,7 +44,6 @@ func (e *Exporter) Export(launchDir, appDir string, stackImage v1.Image, repoSto
 		return packs.FailErr(err, "append droplet to stack")
 	}
 
-	fmt.Println("=== add other layers")
 	repoImage, err = e.addBuildpackLayers(tmpDir, launchDir, repoImage, origImage)
 	if err != nil {
 		return packs.FailErr(err, "append layers")
@@ -64,7 +60,6 @@ func (e *Exporter) Export(launchDir, appDir string, stackImage v1.Image, repoSto
 		return packs.FailErr(err, "set start command")
 	}
 
-	fmt.Println("=== write image")
 	if err := repoStore.Write(repoImage); err != nil {
 		return packs.FailErrCode(err, packs.CodeFailedUpdate, "write")
 	}
@@ -168,7 +163,6 @@ func (e *Exporter) addBuildpackLayers(tmpDir, launchDir string, repoImage v1.Ima
 				return nil, errors.New("toml file layer expected, but no previous image")
 			}
 
-			// fmt.Printf("OrigImage: %+v\n", origImage)
 			config, err := origImage.ConfigFile()
 			if err != nil {
 				return nil, packs.FailErr(err, "find config from origImage")
