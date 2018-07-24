@@ -8,32 +8,33 @@ import (
 	"os/exec"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/buildpack/lifecycle"
+	"github.com/buildpack/lifecycle/testmock"
 	"github.com/buildpack/packs/img"
 	"github.com/golang/mock/gomock"
 	"github.com/google/go-containerregistry/pkg/v1"
-	"github.com/google/go-containerregistry/pkg/v1/mutate"
 	"github.com/sclevine/spec"
 	"github.com/sclevine/spec/report"
 )
 
 func TestExporter(t *testing.T) {
+	rand.Seed(time.Now().UTC().UnixNano())
 	spec.Run(t, "Exporter", testExporter, spec.Report(report.Terminal{}))
 }
 
 func testExporter(t *testing.T, when spec.G, it spec.S) {
 	var (
-		exporter *lifecycle.Exporter
-		// TODO: remove mockCtrl if remains unused
+		exporter       *lifecycle.Exporter
 		mockCtrl       *gomock.Controller
 		stdout, stderr *bytes.Buffer
-		// repoStore      *testmock.MockStore
+		repoStore      *testmock.MockStore
 	)
 
 	it.Before(func() {
 		mockCtrl = gomock.NewController(t)
-		// repoStore = testmock.NewMockStore(mockCtrl)
+		repoStore = testmock.NewMockStore(mockCtrl)
 
 		stdout, stderr = &bytes.Buffer{}, &bytes.Buffer{}
 		exporter = &lifecycle.Exporter{
@@ -49,27 +50,23 @@ func testExporter(t *testing.T, when spec.G, it spec.S) {
 	when("#Export", func() {
 		when("a simple launch dir exists", func() {
 			var imgName string
-			var stackImage v1.Image
-			var repoStore img.Store
+			var stackImage, firstImg v1.Image
 			it.Before(func() {
 				var err error
-				stackImage, err = GetBusyboxWithEntrypoint()
+				stackImage, err = GetStackImage()
 				if err != nil {
-					t.Fatalf("get busybox image for stack: %s", err)
+					t.Fatalf("get stack image: %s", err)
 				}
 
 				imgName = "myorg/" + RandString(8)
-				repoStore, err = img.NewDaemon(imgName)
-				if err != nil {
-					t.Fatal("repo store", imgName, err)
-				}
+				repoStore.EXPECT().Write(gomock.Any()).Do(func(img v1.Image) error {
+					firstImg = img
+					return nil
+				})
 
 				if err := exporter.Export("cmd/exporter/fixtures/first/launch", "cmd/exporter/fixtures/first/launch/app", stackImage, nil, repoStore); err != nil {
 					t.Fatalf("Error: %s\n", err)
 				}
-			})
-			it.After(func() {
-				deleteImg(imgName)
 			})
 
 			it("creates a runnable image", func() {
@@ -89,35 +86,37 @@ func testExporter(t *testing.T, when spec.G, it spec.S) {
 				}
 			})
 
-			it("sets toml files and layer digests labels", func() {
-				out, err := exec.Command("docker", "inspect", imgName, "--format", "{{ range $k, $v := .Config.Labels -}}{{ $k }}={{ $v }}\n{{ end -}}").CombinedOutput()
+			it.Focus("sets toml files and layer digests labels", func() {
+				configFile, err := firstImg.ConfigFile()
 				if err != nil {
-					fmt.Println(string(out))
-					t.Fatal(err)
+					t.Fatalf("Error: %s\n", err)
 				}
-				if !strings.Contains(string(out), "buildpack.id.layer1.diffid=sha256:") {
-					t.Fatalf(`Output "%s" did not contain "%s"`, string(out), "buildpack.id.layer1.diffid=sha256:")
+				labels := configFile.Config.Labels
+
+				if !strings.HasPrefix(labels["buildpack.id.layer1.diffid"], "sha256:") {
+					t.Fatalf(`Label "%s" did not contain "%s"`, labels["buildpack.id.layer1.diffid"], "buildpack.id.layer1.diffid=sha256:")
 				}
-				if !strings.Contains(string(out), "buildpack.id.layer2.diffid=sha256:") {
-					t.Fatalf(`Output "%s" did not contain "%s"`, string(out), "buildpack.id.layer2.diffid=sha256:")
+				if !strings.HasPrefix(labels["buildpack.id.layer2.diffid"], "sha256:") {
+					t.Fatalf(`Label "%s" did not contain "%s"`, labels["buildpack.id.layer2.diffid"], "buildpack.id.layer2.diffid=sha256:")
 				}
-				if !strings.Contains(string(out), "buildpack.id.layer1.toml=mykey = \"myval\"") {
-					t.Fatalf(`Output "%s" did not contain "%s"`, string(out), "buildpack.id.layer1.toml=mykey = \"myval\"")
+				if strings.TrimSpace(labels["buildpack.id.layer1.toml"]) != `mykey = "myval"` {
+					t.Fatalf(`Label "%s" did not equal "%s"`, strings.TrimSpace(labels["buildpack.id.layer1.toml"]), `mykey = "myval"`)
 				}
 			})
 
 			when("rebuilding when toml exists without directory", func() {
+				var secondImg v1.Image
 				it.Before(func() {
-					prevImage, err := repoStore.Image()
-					if err != nil {
-						t.Fatal(err)
-					}
-					if err := exporter.Export("cmd/exporter/fixtures/second/launch", "cmd/exporter/fixtures/second/launch/app", stackImage, prevImage, repoStore); err != nil {
+					repoStore.EXPECT().Write(gomock.Any()).Do(func(img v1.Image) error {
+						secondImg = img
+						return nil
+					})
+					if err := exporter.Export("cmd/exporter/fixtures/second/launch", "cmd/exporter/fixtures/second/launch/app", stackImage, firstImg, repoStore); err != nil {
 						t.Fatalf("Error: %s\n", err)
 					}
 				})
 
-				it.Focus("reuses layers if there is a layer.toml file", func() {
+				it("reuses layers if there is a layer.toml file", func() {
 					fmt.Println("docker", "run", imgName)
 					out, err := exec.Command("docker", "run", "-w", "/launch/app", imgName).CombinedOutput()
 					if err != nil {
@@ -136,24 +135,16 @@ func testExporter(t *testing.T, when spec.G, it spec.S) {
 	}, spec.Parallel(), spec.Report(report.Terminal{}))
 }
 
-func GetBusyboxWithEntrypoint() (v1.Image, error) {
-	stackStore, err := img.NewRegistry("busybox")
+func GetStackImage() (v1.Image, error) {
+	stackStore, err := img.NewDaemon("busybox")
 	if err != nil {
-		return nil, fmt.Errorf("get store for busybox: %s", err)
+		return nil, fmt.Errorf("get store for scratch: %s", err)
 	}
 	stackImage, err := stackStore.Image()
 	if err != nil {
-		return nil, fmt.Errorf("get image for SCRATCH: %s", err)
+		return nil, fmt.Errorf("get image for scratch: %s", err)
 	}
-	configFile, err := stackImage.ConfigFile()
-	if err != nil {
-		return nil, err
-	}
-	config := *configFile.Config.DeepCopy()
-	config.Entrypoint = []string{"sh", "-c"}
-	// TODO: Should we set working directory? It helps with unit tests
-	// config.WorkingDir = appDir
-	return mutate.Config(stackImage, config)
+	return stackImage, nil
 }
 
 func RandString(n int) string {
@@ -162,12 +153,4 @@ func RandString(n int) string {
 		b[i] = 'a' + byte(rand.Intn(26))
 	}
 	return string(b)
-}
-
-func deleteImg(imgName string) error {
-	if out, err := exec.Command("docker", "rmi", "-f", imgName).CombinedOutput(); err != nil {
-		fmt.Println(string(out))
-		return err
-	}
-	return nil
 }
