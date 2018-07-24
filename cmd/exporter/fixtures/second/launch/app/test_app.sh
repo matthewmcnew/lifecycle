@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/bin/sh
 
 source /launch/buildpack.id/layer1/file-from-layer-1
 source /launch/buildpack.id/layer2/file-from-layer-2
