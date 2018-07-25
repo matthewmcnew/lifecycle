@@ -21,38 +21,34 @@ import (
 )
 
 type Exporter struct {
-	Buildpacks []*Buildpack
+	Buildpacks []Buildpack
+	TmpDir     string
 	In         []byte
 	Out, Err   io.Writer
 }
 
 func (e *Exporter) Export(launchDir string, stackImage, origImage v1.Image) (v1.Image, error) {
-	tmpDir, err := ioutil.TempDir("", "pack.export.layer")
-	if err != nil {
-		return nil, packs.FailErr(err, "create temp directory")
-	}
-	defer os.RemoveAll(tmpDir)
-
 	stackDigest, err := stackImage.Digest()
 	if err != nil {
 		return nil, packs.FailErr(err, "stack digest")
 	}
 	metadata := packs.BuildMetadata{
-		// App:        packs.AppMetadata{},
+		App:        packs.AppMetadata{},
 		Buildpacks: []packs.BuildpackMetadata{},
 		Stack: packs.StackMetadata{
 			SHA: stackDigest.String(),
 		},
 	}
 
-	repoImage, err := e.addDirAsLayer(stackImage, filepath.Join(tmpDir, "app.tgz"), filepath.Join(launchDir, "app"), "launch/app")
+	repoImage, topLayerDigest, err := e.addDirAsLayer(stackImage, filepath.Join(e.TmpDir, "app.tgz"), filepath.Join(launchDir, "app"), "launch/app")
 	if err != nil {
 		return nil, packs.FailErr(err, "append droplet to stack")
 	}
+	metadata.App.SHA = topLayerDigest
 
 	for _, buildpack := range e.Buildpacks {
 		bpMetadata := packs.BuildpackMetadata{Key: buildpack.ID}
-		repoImage, bpMetadata.Layers, err = e.addBuildpackLayer(buildpack.ID, tmpDir, launchDir, repoImage, origImage)
+		repoImage, bpMetadata.Layers, err = e.addBuildpackLayer(buildpack.ID, launchDir, repoImage, origImage)
 		if err != nil {
 			return nil, packs.FailErr(err, "append layers")
 		}
@@ -106,7 +102,7 @@ func (e *Exporter) webCommand(tomlPath string) (string, error) {
 	return "", errors.New("Missing process with web type")
 }
 
-func (e *Exporter) addBuildpackLayer(id, tmpDir, launchDir string, repoImage v1.Image, origImage v1.Image) (v1.Image, map[string]packs.LayerMetadata, error) {
+func (e *Exporter) addBuildpackLayer(id, launchDir string, repoImage v1.Image, origImage v1.Image) (v1.Image, map[string]packs.LayerMetadata, error) {
 	metadata := make(map[string]packs.LayerMetadata)
 	layers, err := ioutil.ReadDir(filepath.Join(launchDir, id))
 	if err != nil {
@@ -117,7 +113,7 @@ func (e *Exporter) addBuildpackLayer(id, tmpDir, launchDir string, repoImage v1.
 			continue
 		}
 		dir := filepath.Join(launchDir, id, layer.Name())
-		tarFile := filepath.Join(tmpDir, fmt.Sprintf("layer.%s.%s.tgz", id, layer.Name()))
+		tarFile := filepath.Join(e.TmpDir, fmt.Sprintf("layer.%s.%s.tgz", id, layer.Name()))
 		if err := e.createTarFile(tarFile, dir, filepath.Join("launch", id, layer.Name())); err != nil {
 			return nil, nil, packs.FailErr(err, "tar", dir, "to", tarFile)
 		}
@@ -131,10 +127,10 @@ func (e *Exporter) addBuildpackLayer(id, tmpDir, launchDir string, repoImage v1.
 		if err != nil {
 			return nil, nil, packs.FailErr(err, "calculate layer diffid")
 		}
-		var tomlData interface{}
+		var tomlData map[string]interface{}
 		if _, err := toml.DecodeFile(dir+".toml", &tomlData); err != nil {
 			if !os.IsNotExist(err) {
-				return nil, nil, packs.FailErr(err, "calculate layer diffid")
+				return nil, nil, packs.FailErr(err, "read layer toml data")
 			}
 		}
 		metadata[layer.Name()] = packs.LayerMetadata{SHA: diffid.String(), Data: tomlData}
@@ -194,15 +190,19 @@ func (e *Exporter) addBuildpackLayer(id, tmpDir, launchDir string, repoImage v1.
 	return repoImage, metadata, nil
 }
 
-func (e *Exporter) addDirAsLayer(image v1.Image, tarFile, fsDir, tarDir string) (v1.Image, error) {
+func (e *Exporter) addDirAsLayer(image v1.Image, tarFile, fsDir, tarDir string) (v1.Image, string, error) {
 	if err := e.createTarFile(tarFile, fsDir, tarDir); err != nil {
-		return nil, packs.FailErr(err, "tar", fsDir, "to", tarFile)
+		return nil, "", packs.FailErr(err, "tar", fsDir, "to", tarFile)
 	}
-	newImage, _, err := img.Append(image, tarFile)
+	newImage, topLayer, err := img.Append(image, tarFile)
 	if err != nil {
-		return nil, packs.FailErr(err, "append droplet to stack")
+		return nil, "", packs.FailErr(err, "append droplet to stack")
 	}
-	return newImage, nil
+	diffid, err := topLayer.DiffID()
+	if err != nil {
+		return nil, "", packs.FailErr(err, "calculate layer diffid")
+	}
+	return newImage, diffid.String(), nil
 }
 
 func (e *Exporter) createTarFile(tarFile, fsDir, tarDir string) error {

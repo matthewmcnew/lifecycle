@@ -2,7 +2,9 @@ package main
 
 import (
 	"flag"
+	"io/ioutil"
 	"os"
+	"strings"
 
 	"github.com/BurntSushi/toml"
 	"github.com/buildpack/lifecycle"
@@ -74,12 +76,19 @@ func export() error {
 		return packs.FailErr(err, "read group")
 	}
 
+	tmpDir, err := ioutil.TempDir("", "pack.export.layer")
+	if err != nil {
+		return packs.FailErr(err, "create temp directory")
+	}
+	defer os.RemoveAll(tmpDir)
+
 	exporter := &lifecycle.Exporter{
-		Buildpacks: buildpacks.FromList(group.Buildpacks),
+		Buildpacks: buildpacksFromList(group.Buildpacks),
+		TmpDir:     tmpDir,
 		Out:        os.Stdout,
 		Err:        os.Stderr,
 	}
-	newImage, err = exporter.Export(
+	newImage, err := exporter.Export(
 		launchDir,
 		stackImage,
 		origImage,
@@ -93,4 +102,13 @@ func export() error {
 	}
 
 	return nil
+}
+
+func buildpacksFromList(input []string) []lifecycle.Buildpack {
+	buildpacks := make([]lifecycle.Buildpack, 0, len(input))
+	for _, s := range input {
+		m := strings.SplitN(s, "@", 2)
+		buildpacks = append(buildpacks, lifecycle.Buildpack{ID: m[0]})
+	}
+	return buildpacks
 }
