@@ -105,7 +105,7 @@ func (e *Exporter) addBuildpackLayer(id, launchDir string, repoImage v1.Image, o
 	metadata := make(map[string]packs.LayerMetadata)
 	origLayers := make(map[string]packs.LayerMetadata)
 	if origImage != nil {
-		data, err := GetMetadata(origImage)
+		data, err := e.GetMetadata(origImage)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -162,7 +162,7 @@ func (e *Exporter) addBuildpackLayer(id, launchDir string, repoImage v1.Image, o
 	return repoImage, metadata, nil
 }
 
-func GetMetadata(image v1.Image) (packs.BuildMetadata, error) {
+func (e *Exporter) GetMetadata(image v1.Image) (packs.BuildMetadata, error) {
 	var metadata packs.BuildMetadata
 	cfg, err := image.ConfigFile()
 	if err != nil {
