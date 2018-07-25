@@ -57,156 +57,99 @@ func testExporter(t *testing.T, when spec.G, it spec.S) {
 	})
 
 	when("#Export", func() {
-		when("a simple launch dir exists", func() {
-			var (
-				stackImage v1.Image
-			)
-			it.Before(func() {
-				var err error
-				stackImage, err = GetBusyboxWithEntrypoint()
-				if err != nil {
-					t.Fatalf("get busybox image for stack: %s", err)
-				}
-			})
-
-			it("sets toml files and layer digests labels", func() {
-				image, err := exporter.Export("testdata/exporter/first/launch", stackImage, nil)
-				if err != nil {
-					t.Fatalf("Error: %s\n", err)
-				}
-				data, err := GetMetadata(image)
-				if err != nil {
-					t.Fatalf("Error: %s\n", err)
-				}
-
-				if !strings.HasPrefix(data.Stack.SHA, "sha256:") {
-					t.Fatalf(`Matadata label '%s' did not have stack/sha with prefix 'sha256:'`, data.Stack.SHA)
-				}
-				if diff := cmp.Diff(data.Buildpacks[0].Layers["layer1"].Data, map[string]interface{}{"mykey": "myval"}); diff != "" {
-					t.Fatalf(`Layer toml did not match: (-got +want)\n%s`, diff)
-				}
-			})
-
-			it("sets app as layer", func() {
-				image, err := exporter.Export("testdata/exporter/first/launch", stackImage, nil)
-				if err != nil {
-					t.Fatalf("Error: %s\n", err)
-				}
-				data, err := GetMetadata(image)
-				if err != nil {
-					t.Fatalf("Error: %s\n", err)
-				}
-				hash, err := v1.NewHash(data.App.SHA)
-				if err != nil {
-					t.Fatalf("Error: %s\n", err)
-				}
-				layer, err := image.LayerByDiffID(hash)
-				if err != nil {
-					t.Fatalf("Error: %s\n", err)
-				}
-
-				txt, err := GetLayerFile(layer, "launch/app/subdir/myfile.txt")
-				if err != nil {
-					t.Fatalf("Error: %s\n", err)
-				}
-				if strings.TrimSpace(txt) != "mycontents" {
-					t.Fatalf(`app layer sample file contents: '%s' != 'mycontents'`, strings.TrimSpace(txt))
-				}
-			})
-
-			it("sets buildpack/layer1 as layer", func() {
-				image, err := exporter.Export("testdata/exporter/first/launch", stackImage, nil)
-				if err != nil {
-					t.Fatalf("Error: %s\n", err)
-				}
-				data, err := GetMetadata(image)
-				if err != nil {
-					t.Fatalf("Error: %s\n", err)
-				}
-				hash, err := v1.NewHash(data.Buildpacks[0].Layers["layer1"].SHA)
-				if err != nil {
-					t.Fatalf("Error: %s\n", err)
-				}
-				layer, err := image.LayerByDiffID(hash)
-				if err != nil {
-					t.Fatalf("Error: %s\n", err)
-				}
-
-				txt, err := GetLayerFile(layer, "launch/buildpack.id/layer1/file-from-layer-1")
-				if err != nil {
-					t.Fatalf("Error: %s\n", err)
-				}
-				if strings.TrimSpace(txt) != "echo text from layer 1" {
-					t.Fatalf(`buildpack layer "layer1": sample file contents: '%s' != 'echo text from layer 1'`, strings.TrimSpace(txt))
-				}
-			})
-
-			it("sets buildpack/layer2 as layer", func() {
-				image, err := exporter.Export("testdata/exporter/first/launch", stackImage, nil)
-				if err != nil {
-					t.Fatalf("Error: %s\n", err)
-				}
-				data, err := GetMetadata(image)
-				if err != nil {
-					t.Fatalf("Error: %s\n", err)
-				}
-				hash, err := v1.NewHash(data.Buildpacks[0].Layers["layer2"].SHA)
-				if err != nil {
-					t.Fatalf("Error: %s\n", err)
-				}
-				layer, err := image.LayerByDiffID(hash)
-				if err != nil {
-					t.Fatalf("Error: %s\n", err)
-				}
-
-				txt, err := GetLayerFile(layer, "launch/buildpack.id/layer2/file-from-layer-2")
-				if err != nil {
-					t.Fatalf("Error: %s\n", err)
-				}
-				if strings.TrimSpace(txt) != "echo text from layer 2" {
-					t.Fatalf(`buildpack layer "layer2": sample file contents: '%s' != 'echo text from layer 2'`, strings.TrimSpace(txt))
-				}
-			})
-
-			// it("creates a runnable image", func() {
-			// 	out, err := exec.Command("docker", "run", "-w", "/launch/app", imgName).CombinedOutput()
-			// 	if err != nil {
-			// 		t.Fatalf("Error: %s\n", err)
-			// 	}
-			//
-			// 	if !strings.Contains(string(out), "text from layer 1") {
-			// 		t.Fatalf(`Output "%s" did not contain "%s"`, string(out), "text from layer 1")
-			// 	}
-			// 	if !strings.Contains(string(out), "text from layer 2") {
-			// 		t.Fatalf(`Output "%s" did not contain "%s"`, string(out), "text from layer 2")
-			// 	}
-			// 	if !strings.Contains(string(out), "Arg1 is 'MyArg'") {
-			// 		t.Fatalf(`Output "%s" did not contain "%s"`, string(out), "Arg1 is 'MyArg'")
-			// 	}
-			// })
-
-			// when("rebuilding when toml exists without directory", func() {
-			// 	it.Before(func() {
-			// 		if err := exporter.Export("testdata/exporter/second/launch", stackImage, repoStore); err != nil {
-			// 			t.Fatalf("Error: %s\n", err)
-			// 		}
-			// 	})
-			//
-			// 	it("reuses layers if there is a layer.toml file", func() {
-			// 		out, err := exec.Command("docker", "run", "-w", "/launch/app", imgName).CombinedOutput()
-			// 		if err != nil {
-			// 			fmt.Println(string(out))
-			// 			t.Fatal(err)
-			// 		}
-			// 		if !strings.Contains(string(out), "text from layer 1") {
-			// 			t.Fatalf(`Output "%s" did not contain "%s"`, string(out), "text from layer 1")
-			// 		}
-			// 		if !strings.Contains(string(out), "text from new layer 2") {
-			// 			t.Fatalf(`Output "%s" did not contain "%s"`, string(out), "text from new layer 2")
-			// 		}
-			// 	})
-			// })
+		var stackImage v1.Image
+		it.Before(func() {
+			var err error
+			stackImage, err = GetBusyboxWithEntrypoint()
+			if err != nil {
+				t.Fatalf("get busybox image for stack: %s", err)
+			}
 		})
+
+		it("a simple launch dir exists", func() {
+			image, err := exporter.Export("testdata/exporter/first/launch", stackImage, nil)
+			if err != nil {
+				t.Fatalf("Error: %s\n", err)
+			}
+			data, err := GetMetadata(image)
+			if err != nil {
+				t.Fatalf("Error: %s\n", err)
+			}
+
+			t.Log("sets toml files in image metadata")
+			if diff := cmp.Diff(data.Buildpacks[0].Layers["layer1"].Data, map[string]interface{}{"mykey": "myval"}); diff != "" {
+				t.Fatalf(`Layer toml did not match: (-got +want)\n%s`, diff)
+			}
+
+			t.Log("adds app layer to image")
+			if txt, err := GetImageFile(image, data.App.SHA, "launch/app/subdir/myfile.txt"); err != nil {
+				t.Fatalf("Error: %s\n", err)
+			} else if diff := cmp.Diff(strings.TrimSpace(txt), "mycontents"); diff != "" {
+				t.Fatalf(`launch/app/subdir/myfile.txt: (-got +want)\n%s`, diff)
+			}
+
+			t.Log("adds buildpack/layer1 as layer")
+			if txt, err := GetImageFile(image, data.Buildpacks[0].Layers["layer1"].SHA, "launch/buildpack.id/layer1/file-from-layer-1"); err != nil {
+				t.Fatalf("Error: %s\n", err)
+			} else if diff := cmp.Diff(strings.TrimSpace(txt), "echo text from layer 1"); diff != "" {
+				t.Fatal("launch/buildpack.id/layer1/file-from-layer-1: (-got +want)", diff)
+			}
+
+			t.Log("adds buildpack/layer2 as layer")
+			if txt, err := GetImageFile(image, data.Buildpacks[0].Layers["layer2"].SHA, "launch/buildpack.id/layer2/file-from-layer-2"); err != nil {
+				t.Fatalf("Error: %s\n", err)
+			} else if diff := cmp.Diff(strings.TrimSpace(txt), "echo text from layer 2"); diff != "" {
+				t.Fatal("launch/buildpack.id/layer2/file-from-layer-2: (-got +want)", diff)
+			}
+
+			t.Log("Sets cmd from metadata.toml")
+			cfg, err := image.ConfigFile()
+			if err != nil {
+				t.Fatal("reading image config")
+			}
+			if diff := cmp.Diff(cfg.Config.Cmd, []string{"./test_app.sh MyArg"}); diff != "" {
+				t.Fatal(diff)
+			}
+		})
+
+		// it("creates a runnable image", func() {
+		// 	out, err := exec.Command("docker", "run", "-w", "/launch/app", imgName).CombinedOutput()
+		// 	if err != nil {
+		// 		t.Fatalf("Error: %s\n", err)
+		// 	}
+		//
+		// 	if !strings.Contains(string(out), "text from layer 1") {
+		// 		t.Fatalf(`Output "%s" did not contain "%s"`, string(out), "text from layer 1")
+		// 	}
+		// 	if !strings.Contains(string(out), "text from layer 2") {
+		// 		t.Fatalf(`Output "%s" did not contain "%s"`, string(out), "text from layer 2")
+		// 	}
+		// 	if !strings.Contains(string(out), "Arg1 is 'MyArg'") {
+		// 		t.Fatalf(`Output "%s" did not contain "%s"`, string(out), "Arg1 is 'MyArg'")
+		// 	}
+		// })
+
+		// when("rebuilding when toml exists without directory", func() {
+		// 	it.Before(func() {
+		// 		if err := exporter.Export("testdata/exporter/second/launch", stackImage, repoStore); err != nil {
+		// 			t.Fatalf("Error: %s\n", err)
+		// 		}
+		// 	})
+		//
+		// 	it("reuses layers if there is a layer.toml file", func() {
+		// 		out, err := exec.Command("docker", "run", "-w", "/launch/app", imgName).CombinedOutput()
+		// 		if err != nil {
+		// 			fmt.Println(string(out))
+		// 			t.Fatal(err)
+		// 		}
+		// 		if !strings.Contains(string(out), "text from layer 1") {
+		// 			t.Fatalf(`Output "%s" did not contain "%s"`, string(out), "text from layer 1")
+		// 		}
+		// 		if !strings.Contains(string(out), "text from new layer 2") {
+		// 			t.Fatalf(`Output "%s" did not contain "%s"`, string(out), "text from new layer 2")
+		// 		}
+		// 	})
+		// })
 	}, spec.Parallel(), spec.Report(report.Terminal{}))
 }
 
@@ -256,6 +199,18 @@ func GetLayerFile(layer v1.Layer, path string) (string, error) {
 		}
 	}
 	return "", fmt.Errorf("file not found: %s", path)
+}
+
+func GetImageFile(image v1.Image, layerDigest, path string) (string, error) {
+	hash, err := v1.NewHash(layerDigest)
+	if err != nil {
+		return "", err
+	}
+	layer, err := image.LayerByDiffID(hash)
+	if err != nil {
+		return "", err
+	}
+	return GetLayerFile(layer, path)
 }
 
 // func GetLayerFromImage(image v1.Image, keys ...string) {
