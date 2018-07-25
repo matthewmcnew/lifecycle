@@ -220,25 +220,6 @@ func GetImageFile(image v1.Image, layerDigest, path string) (string, error) {
 	return GetLayerFile(layer, path)
 }
 
-// func GetLayerFromImage(image v1.Image, keys ...string) {
-// 	cfg, err := image.ConfigFile()
-// 	if err != nil {
-// 		t.Fatalf("Error: %s\n", err)
-// 	}
-// 	digest, err := jsonparser.GetString([]byte(cfg.Config.Labels["sh.packs.build"]), "app", "sha")
-// 	if err != nil {
-// 		t.Fatalf("Error: %s\n", err)
-// 	}
-// 	hash, err := v1.NewHash(digest)
-// 	if err != nil {
-// 		t.Fatalf("Error: %s\n", err)
-// 	}
-// 	layer, err := image.LayerByDiffID(hash)
-// 	if err != nil {
-// 		t.Fatalf("Error: %s\n", err)
-// 	}
-// }
-
 type Metadata struct {
 	Stack struct {
 		SHA string `json:"sha"`
