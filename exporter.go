@@ -103,7 +103,7 @@ func (e *Exporter) webCommand(tomlPath string) (string, error) {
 
 func (e *Exporter) addBuildpackLayer(id, launchDir string, repoImage v1.Image, origImage v1.Image) (v1.Image, map[string]packs.LayerMetadata, error) {
 	metadata := make(map[string]packs.LayerMetadata)
-	var origLayers map[string]packs.LayerMetadata
+	origLayers := make(map[string]packs.LayerMetadata)
 	if origImage != nil {
 		data, err := GetMetadata(origImage)
 		if err != nil {
@@ -126,7 +126,7 @@ func (e *Exporter) addBuildpackLayer(id, launchDir string, repoImage v1.Image, o
 		layerName := filepath.Base(dir)
 		dirInfo, err := os.Stat(dir)
 		if os.IsNotExist(err) {
-			if origLayers == nil || origLayers[layerName].SHA == "" {
+			if origLayers[layerName].SHA == "" {
 				return nil, nil, fmt.Errorf("toml file layer expected, but no previous image data: %s/%s", id, layerName)
 			}
 			layerDiffID = origLayers[layerName].SHA
