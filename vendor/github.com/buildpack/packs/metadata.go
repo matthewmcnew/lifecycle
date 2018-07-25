@@ -29,5 +29,6 @@ type StackMetadata struct {
 }
 
 type LayerMetadata struct {
+	SHA  string      `json:"sha"`
 	Data interface{} `json:"data"`
 }

@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/buger/jsonparser"
 	"github.com/buildpack/lifecycle"
 	"github.com/buildpack/packs/img"
 	"github.com/google/go-containerregistry/pkg/v1"
@@ -31,6 +32,9 @@ func testExporter(t *testing.T, when spec.G, it spec.S) {
 	it.Before(func() {
 		stdout, stderr = &bytes.Buffer{}, &bytes.Buffer{}
 		exporter = &lifecycle.Exporter{
+			Buildpacks: []*lifecycle.Buildpack{
+				{ID: "buildpack.id"},
+			},
 			Out: io.MultiWriter(stdout, it.Out()),
 			Err: io.MultiWriter(stderr, it.Out()),
 		}
@@ -61,15 +65,20 @@ func testExporter(t *testing.T, when spec.G, it spec.S) {
 				}
 
 				label := cfg.Config.Labels["sh.packs.build"]
-
-				if !strings.Contains(label, "buildpack.id.layer1.diffid=sha256:") {
-					t.Fatalf(`Output "%s" did not contain "%s"`, label, "buildpack.id.layer1.diffid=sha256:")
+				if s, _ := jsonparser.GetString([]byte(label), "stack", "sha"); !strings.HasPrefix(s, "sha256:") {
+					t.Fatalf(`Matadata label '%s' did not have stack/sha with prefix 'sha256:'`, label)
 				}
-				if !strings.Contains(label, "buildpack.id.layer2.diffid=sha256:") {
-					t.Fatalf(`Output "%s" did not contain "%s"`, label, "buildpack.id.layer2.diffid=sha256:")
+				if s, _ := jsonparser.GetString([]byte(label), "buildpacks", "[0]", "key"); s != "buildpack.id" {
+					t.Fatalf(`Matadata label '%s' did not have buildpacks/0/key != 'buildpack.id'`, label)
 				}
-				if !strings.Contains(label, "buildpack.id.layer1.toml=mykey = \"myval\"") {
-					t.Fatalf(`Output "%s" did not contain "%s"`, label, "buildpack.id.layer1.toml=mykey = \"myval\"")
+				if s, _ := jsonparser.GetString([]byte(label), "buildpacks", "[0]", "layers", "layer1", "sha"); !strings.HasPrefix(s, "sha256:") {
+					t.Fatalf(`Matadata label '%s' did not have buildpacks/0/layers/layer1/sha with prefix 'sha256:'`, label)
+				}
+				if s, _ := jsonparser.GetString([]byte(label), "buildpacks", "[0]", "layers", "layer1", "data", "mykey"); s != "myval" {
+					t.Fatalf(`Matadata label '%s' did not have buildpacks/0/layers/layer1/data/mykey != 'myval'`, label)
+				}
+				if s, _ := jsonparser.GetString([]byte(label), "buildpacks", "[0]", "layers", "layer2", "sha"); !strings.HasPrefix(s, "sha256:") {
+					t.Fatalf(`Matadata label '%s' did not have buildpacks/0/layers/layer2/sha with prefix 'sha256:'`, label)
 				}
 			})
 

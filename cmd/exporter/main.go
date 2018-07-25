@@ -4,6 +4,7 @@ import (
 	"flag"
 	"os"
 
+	"github.com/BurntSushi/toml"
 	"github.com/buildpack/lifecycle"
 	"github.com/buildpack/packs"
 	"github.com/buildpack/packs/img"
@@ -14,6 +15,7 @@ var (
 	stackName  string
 	useDaemon  bool
 	useHelpers bool
+	groupPath  string
 	launchDir  string
 )
 
@@ -21,6 +23,7 @@ func init() {
 	packs.InputStackName(&stackName)
 	packs.InputUseDaemon(&useDaemon)
 	packs.InputUseHelpers(&useHelpers)
+	packs.InputBPGroupPath(&groupPath)
 
 	flag.StringVar(&launchDir, "launch", "/launch", "launch directory")
 }
@@ -64,9 +67,17 @@ func export() error {
 		origImage = nil
 	}
 
+	var group struct {
+		Buildpacks []string
+	}
+	if _, err := toml.DecodeFile(groupPath, &group); err != nil {
+		return packs.FailErr(err, "read group")
+	}
+
 	exporter := &lifecycle.Exporter{
-		Out: os.Stdout,
-		Err: os.Stderr,
+		Buildpacks: buildpacks.FromList(group.Buildpacks),
+		Out:        os.Stdout,
+		Err:        os.Stderr,
 	}
 	newImage, err = exporter.Export(
 		launchDir,

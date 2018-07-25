@@ -3,6 +3,7 @@ package lifecycle
 import (
 	"archive/tar"
 	"compress/gzip"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -20,8 +21,9 @@ import (
 )
 
 type Exporter struct {
-	In       []byte
-	Out, Err io.Writer
+	Buildpacks []*Buildpack
+	In         []byte
+	Out, Err   io.Writer
 }
 
 func (e *Exporter) Export(launchDir string, stackImage, origImage v1.Image) (v1.Image, error) {
@@ -31,18 +33,30 @@ func (e *Exporter) Export(launchDir string, stackImage, origImage v1.Image) (v1.
 	}
 	defer os.RemoveAll(tmpDir)
 
-	tarFile := filepath.Join(tmpDir, "app.tgz")
-	if err := e.createTarFile(tarFile, filepath.Join(launchDir, "app"), "launch/app"); err != nil {
-		return nil, packs.FailErr(err, "tar", filepath.Join(launchDir, "app"), "to", tarFile)
+	stackDigest, err := stackImage.Digest()
+	if err != nil {
+		return nil, packs.FailErr(err, "stack digest")
 	}
-	repoImage, _, err := img.Append(stackImage, tarFile)
+	metadata := packs.BuildMetadata{
+		// App:        packs.AppMetadata{},
+		Buildpacks: []packs.BuildpackMetadata{},
+		Stack: packs.StackMetadata{
+			SHA: stackDigest.String(),
+		},
+	}
+
+	repoImage, err := e.addDirAsLayer(stackImage, filepath.Join(tmpDir, "app.tgz"), filepath.Join(launchDir, "app"), "launch/app")
 	if err != nil {
 		return nil, packs.FailErr(err, "append droplet to stack")
 	}
 
-	repoImage, err = e.addBuildpackLayers(tmpDir, launchDir, repoImage, origImage)
-	if err != nil {
-		return nil, packs.FailErr(err, "append layers")
+	for _, buildpack := range e.Buildpacks {
+		bpMetadata := packs.BuildpackMetadata{Key: buildpack.ID}
+		repoImage, bpMetadata.Layers, err = e.addBuildpackLayer(buildpack.ID, tmpDir, launchDir, repoImage, origImage)
+		if err != nil {
+			return nil, packs.FailErr(err, "append layers")
+		}
+		metadata.Buildpacks = append(metadata.Buildpacks, bpMetadata)
 	}
 
 	// TODO: This appears to be the correct answer. Is it?
@@ -54,6 +68,15 @@ func (e *Exporter) Export(launchDir string, stackImage, origImage v1.Image) (v1.
 	repoImage, err = e.startCommand(repoImage, webCommand)
 	if err != nil {
 		return nil, packs.FailErr(err, "set start command")
+	}
+
+	buildJSON, err := json.Marshal(metadata)
+	if err != nil {
+		return nil, packs.FailErr(err, "get encode metadata")
+	}
+	repoImage, err = img.Label(repoImage, packs.BuildLabel, string(buildJSON))
+	if err != nil {
+		return nil, packs.FailErr(err, "set metdata label")
 	}
 
 	return repoImage, nil
@@ -83,109 +106,103 @@ func (e *Exporter) webCommand(tomlPath string) (string, error) {
 	return "", errors.New("Missing process with web type")
 }
 
-func (e *Exporter) addBuildpackLayers(tmpDir, launchDir string, repoImage v1.Image, origImage v1.Image) (v1.Image, error) {
-	ids, err := ioutil.ReadDir(launchDir)
+func (e *Exporter) addBuildpackLayer(id, tmpDir, launchDir string, repoImage v1.Image, origImage v1.Image) (v1.Image, map[string]packs.LayerMetadata, error) {
+	metadata := make(map[string]packs.LayerMetadata)
+	layers, err := ioutil.ReadDir(filepath.Join(launchDir, id))
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	for _, id := range ids {
-		// TODO should this be iterating over buildpack ids, instead of launchDir entries??
-		if id.Name() == "app" || !id.IsDir() {
+	for _, layer := range layers {
+		if !layer.IsDir() {
 			continue
 		}
-		layers, err := ioutil.ReadDir(filepath.Join(launchDir, id.Name()))
+		dir := filepath.Join(launchDir, id, layer.Name())
+		tarFile := filepath.Join(tmpDir, fmt.Sprintf("layer.%s.%s.tgz", id, layer.Name()))
+		if err := e.createTarFile(tarFile, dir, filepath.Join("launch", id, layer.Name())); err != nil {
+			return nil, nil, packs.FailErr(err, "tar", dir, "to", tarFile)
+		}
+		var topLayer v1.Layer
+		repoImage, topLayer, err = img.Append(repoImage, tarFile)
 		if err != nil {
-			return nil, err
+			return nil, nil, packs.FailErr(err, "append droplet to image")
 		}
-		for _, layer := range layers {
-			if !layer.IsDir() {
-				continue
-			}
-			dir := filepath.Join(launchDir, id.Name(), layer.Name())
-			tarFile := filepath.Join(tmpDir, fmt.Sprintf("layer.%s.%s.tgz", id.Name(), layer.Name()))
-			if err := e.createTarFile(tarFile, dir, filepath.Join("launch", id.Name(), layer.Name())); err != nil {
-				return nil, packs.FailErr(err, "tar", dir, "to", tarFile)
-			}
-			var topLayer v1.Layer
-			repoImage, topLayer, err = img.Append(repoImage, tarFile)
-			if err != nil {
-				return nil, packs.FailErr(err, "append droplet to image")
-			}
 
-			diffid, err := topLayer.DiffID()
-			if err != nil {
-				return nil, packs.FailErr(err, "calculate layer diffid")
-			}
-			repoImage, err = img.Label(repoImage, fmt.Sprintf("%s.%s.diffid", id.Name(), layer.Name()), diffid.String())
-			if err != nil {
-				return nil, packs.FailErr(err, "set layer diffid on image for", id.Name(), layer.Name())
-			}
-
-			if txt, err := ioutil.ReadFile(dir + ".toml"); os.IsNotExist(err) {
-				// file doesn't exist
-			} else if err != nil {
-				return nil, packs.FailErr(err, "reading toml file for", dir)
-			} else {
-				repoImage, err = img.Label(repoImage, fmt.Sprintf("%s.%s.toml", id.Name(), layer.Name()), string(txt))
-				if err != nil {
-					return nil, packs.FailErr(err, "set layer toml on image for", id.Name(), layer.Name())
-				}
+		diffid, err := topLayer.DiffID()
+		if err != nil {
+			return nil, nil, packs.FailErr(err, "calculate layer diffid")
+		}
+		var tomlData interface{}
+		if _, err := toml.DecodeFile(dir+".toml", &tomlData); err != nil {
+			if !os.IsNotExist(err) {
+				return nil, nil, packs.FailErr(err, "calculate layer diffid")
 			}
 		}
-		for _, layer := range layers {
-			if layer.IsDir() || !strings.HasSuffix(layer.Name(), ".toml") {
-				continue
-			}
-			file := filepath.Join(launchDir, id.Name(), layer.Name())
-			if _, err := os.Stat(strings.TrimSuffix(file, ".toml")); err == nil {
-				// directory exists, it was handled above
-				continue
-			} else if !os.IsNotExist(err) {
-				return nil, packs.FailErr(err, "checking for existence of matching dir for", file)
-			}
+		metadata[layer.Name()] = packs.LayerMetadata{SHA: diffid.String(), Data: tomlData}
+	}
+	for _, layer := range layers {
+		if layer.IsDir() || !strings.HasSuffix(layer.Name(), ".toml") {
+			continue
+		}
+		file := filepath.Join(launchDir, id, layer.Name())
+		if _, err := os.Stat(strings.TrimSuffix(file, ".toml")); err == nil {
+			// directory exists, it was handled above
+			continue
+		} else if !os.IsNotExist(err) {
+			return nil, nil, packs.FailErr(err, "checking for existence of matching dir for", file)
+		}
 
-			if txt, err := ioutil.ReadFile(file); err != nil {
-				return nil, packs.FailErr(err, "reading toml file", file)
-			} else {
-				repoImage, err = img.Label(repoImage, fmt.Sprintf("%s.%s", id.Name(), layer.Name()), string(txt))
-				if err != nil {
-					return nil, packs.FailErr(err, "set layer toml on image for", id.Name(), layer.Name())
-				}
+		if txt, err := ioutil.ReadFile(file); err != nil {
+			return nil, nil, packs.FailErr(err, "reading toml file", file)
+		} else {
+			repoImage, err = img.Label(repoImage, fmt.Sprintf("%s.%s", id, layer.Name()), string(txt))
+			if err != nil {
+				return nil, nil, packs.FailErr(err, "set layer toml on image for", id, layer.Name())
 			}
+		}
 
-			if origImage == nil {
-				return nil, errors.New("toml file layer expected, but no previous image")
-			}
+		if origImage == nil {
+			return nil, nil, errors.New("toml file layer expected, but no previous image")
+		}
 
-			config, err := origImage.ConfigFile()
-			if err != nil {
-				return nil, packs.FailErr(err, "find config from origImage")
-			}
-			digestKey := fmt.Sprintf("%s.%s.diffid", id.Name(), strings.TrimSuffix(layer.Name(), ".toml"))
-			digest := config.Config.Labels[digestKey]
-			if digest == "" {
-				return nil, fmt.Errorf("could not find '%s' in %+v", digestKey, config.Config.Labels)
-			}
-			// TODO ; don't hardcode algorithm
-			hash := v1.Hash{
-				Algorithm: "sha256",
-				Hex:       strings.TrimPrefix(digest, "sha256:"),
-			}
-			origLayer, err := origImage.LayerByDiffID(hash)
-			if err != nil {
-				return nil, packs.FailErr(err, "find previous layer", id.Name(), layer.Name())
-			}
-			repoImage, err = mutate.AppendLayers(repoImage, origLayer)
-			if err != nil {
-				return nil, packs.FailErr(err, "append layer from previous image", id.Name(), layer.Name())
-			}
-			repoImage, err = img.Label(repoImage, digestKey, digest)
-			if err != nil {
-				return nil, packs.FailErr(err, "set layer digest on image for", id.Name(), layer.Name())
-			}
+		config, err := origImage.ConfigFile()
+		if err != nil {
+			return nil, nil, packs.FailErr(err, "find config from origImage")
+		}
+		digestKey := fmt.Sprintf("%s.%s.diffid", id, strings.TrimSuffix(layer.Name(), ".toml"))
+		digest := config.Config.Labels[digestKey]
+		if digest == "" {
+			return nil, nil, fmt.Errorf("could not find '%s' in %+v", digestKey, config.Config.Labels)
+		}
+		// TODO ; don't hardcode algorithm
+		hash := v1.Hash{
+			Algorithm: "sha256",
+			Hex:       strings.TrimPrefix(digest, "sha256:"),
+		}
+		origLayer, err := origImage.LayerByDiffID(hash)
+		if err != nil {
+			return nil, nil, packs.FailErr(err, "find previous layer", id, layer.Name())
+		}
+		repoImage, err = mutate.AppendLayers(repoImage, origLayer)
+		if err != nil {
+			return nil, nil, packs.FailErr(err, "append layer from previous image", id, layer.Name())
+		}
+		repoImage, err = img.Label(repoImage, digestKey, digest)
+		if err != nil {
+			return nil, nil, packs.FailErr(err, "set layer digest on image for", id, layer.Name())
 		}
 	}
-	return repoImage, nil
+	return repoImage, metadata, nil
+}
+
+func (e *Exporter) addDirAsLayer(image v1.Image, tarFile, fsDir, tarDir string) (v1.Image, error) {
+	if err := e.createTarFile(tarFile, fsDir, tarDir); err != nil {
+		return nil, packs.FailErr(err, "tar", fsDir, "to", tarFile)
+	}
+	newImage, _, err := img.Append(image, tarFile)
+	if err != nil {
+		return nil, packs.FailErr(err, "append droplet to stack")
+	}
+	return newImage, nil
 }
 
 func (e *Exporter) createTarFile(tarFile, fsDir, tarDir string) error {
