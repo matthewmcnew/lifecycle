@@ -81,7 +81,16 @@ func testExporter(t *testing.T, when spec.G, it spec.S) {
 				t.Fatal(diff)
 			}
 
-			t.Log("sets toml files in b metadata")
+			t.Log("sets stack sha in metadata")
+			stackDigest, err := stackImage.Digest()
+			if err != nil {
+				t.Fatalf("Error: %s\n", err)
+			}
+			if diff := cmp.Diff(data.Stack.SHA, stackDigest.String()); diff != "" {
+				t.Fatalf(`Stack digest did not match: (-got +want)\n%s`, diff)
+			}
+
+			t.Log("sets toml files in buildpack metadata")
 			if diff := cmp.Diff(data.Buildpacks[0].Layers["layer1"].Data, map[string]interface{}{"mykey": "myval"}); diff != "" {
 				t.Fatalf(`Layer toml did not match: (-got +want)\n%s`, diff)
 			}
