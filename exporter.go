@@ -221,15 +221,16 @@ func (e *Exporter) createTarFile(tarFile, fsDir, tarDir string) error {
 		if err := tw.WriteHeader(header); err != nil {
 			return err
 		}
-		f, err := os.Open(file)
-		if err != nil {
-			return err
+		if fi.Mode().IsRegular() {
+			f, err := os.Open(file)
+			if err != nil {
+				return err
+			}
+			if _, err := io.Copy(tw, f); err != nil {
+				return err
+			}
+			return f.Close()
 		}
-		if _, err := io.Copy(tw, f); err != nil {
-			return err
-		}
-		return f.Close()
+		return nil
 	})
-
-	return nil
 }
