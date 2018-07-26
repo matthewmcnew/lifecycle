@@ -212,9 +212,22 @@ func (e *Exporter) createTarFile(tarFile, fsDir, tarDir string) error {
 		if err != nil {
 			return err
 		}
-		header, err := tar.FileInfoHeader(fi, fi.Name())
-		if err != nil {
-			return err
+
+		var header *tar.Header
+		if fi.Mode()&os.ModeSymlink != 0 {
+			target, err := os.Readlink(file)
+			if err != nil {
+				return err
+			}
+			header, err = tar.FileInfoHeader(fi, target)
+			if err != nil {
+				return err
+			}
+		} else {
+			header, err = tar.FileInfoHeader(fi, fi.Name())
+			if err != nil {
+				return err
+			}
 		}
 		header.Name = filepath.Join(tarDir, relPath)
 
