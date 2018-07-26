@@ -121,7 +121,7 @@ func (e *Exporter) addBuildpackLayer(id, launchDir string, repoImage v1.Image, o
 		return nil, nil, err
 	}
 	for _, layer := range layers {
-		if layer == "launch.toml" {
+		if filepath.Base(layer) == "launch.toml" {
 			// TODO: it would be better if launch.toml was in the parent with [BUILDPACK_ID].toml ?? or [BUILDPACK_id]/conf/launch.toml ??
 			continue
 		}
