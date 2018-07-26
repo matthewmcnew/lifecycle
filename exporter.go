@@ -26,7 +26,7 @@ type Exporter struct {
 	Out, Err   io.Writer
 }
 
-func (e *Exporter) Export(launchDir string, stackImage, origImage v1.Image) (v1.Image, error) {
+func (e *Exporter) Export(buildMetadata BuildMetadata, launchDir string, stackImage, origImage v1.Image) (v1.Image, error) {
 	stackDigest, err := stackImage.Digest()
 	if err != nil {
 		return nil, packs.FailErr(err, "stack digest")
@@ -55,7 +55,7 @@ func (e *Exporter) Export(launchDir string, stackImage, origImage v1.Image) (v1.
 	}
 
 	// TODO: This appears to be the correct answer. Is it?
-	webCommand, err := e.webCommand(filepath.Join(launchDir, "app", "metadata.toml"))
+	webCommand, err := e.webCommand(buildMetadata)
 	if err != nil {
 		return nil, packs.FailErr(err, "read web command from metadata")
 	}
@@ -88,12 +88,8 @@ func (e *Exporter) startCommand(image v1.Image, cmd ...string) (v1.Image, error)
 	return mutate.Config(image, config)
 }
 
-func (e *Exporter) webCommand(tomlPath string) (string, error) {
-	launch := LaunchTOML{}
-	if _, err := toml.DecodeFile(tomlPath, &launch); err != nil {
-		return "", err
-	}
-	for _, process := range launch.Processes {
+func (e *Exporter) webCommand(buildMetadata BuildMetadata) (string, error) {
+	for _, process := range buildMetadata.Processes {
 		if process.Type == "web" {
 			return process.Command, nil
 		}

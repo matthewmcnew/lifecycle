@@ -30,6 +30,7 @@ func TestExporter(t *testing.T) {
 func testExporter(t *testing.T, when spec.G, it spec.S) {
 	var (
 		exporter       *lifecycle.Exporter
+		buildMetadata  lifecycle.BuildMetadata
 		stdout, stderr *bytes.Buffer
 		tmpDir         string
 	)
@@ -49,6 +50,13 @@ func testExporter(t *testing.T, when spec.G, it spec.S) {
 			Out: io.MultiWriter(stdout, it.Out()),
 			Err: io.MultiWriter(stderr, it.Out()),
 		}
+		buildMetadata = lifecycle.BuildMetadata{
+			Processes: []lifecycle.Process{
+				{Type: "other-type", Command: "some-process"},
+				{Type: "web", Command: "./test_app.sh MyArg"},
+				{Type: "worker", Command: "some-other-process"},
+			},
+		}
 	})
 	it.After(func() {
 		if err := os.RemoveAll(tmpDir); err != nil {
@@ -67,7 +75,7 @@ func testExporter(t *testing.T, when spec.G, it spec.S) {
 		})
 
 		it("a simple launch dir exists", func() {
-			image, err := exporter.Export("testdata/exporter/first/launch", stackImage, nil)
+			image, err := exporter.Export(buildMetadata, "testdata/exporter/first/launch", stackImage, nil)
 			if err != nil {
 				t.Fatalf("Error: %s\n", err)
 			}
@@ -130,14 +138,14 @@ func testExporter(t *testing.T, when spec.G, it spec.S) {
 			var firstImage v1.Image
 			it.Before(func() {
 				var err error
-				firstImage, err = exporter.Export("testdata/exporter/first/launch", stackImage, nil)
+				firstImage, err = exporter.Export(buildMetadata, "testdata/exporter/first/launch", stackImage, nil)
 				if err != nil {
 					t.Fatalf("Error: %s\n", err)
 				}
 			})
 
 			it("reuses layers if there is a layer.toml file", func() {
-				image, err := exporter.Export("testdata/exporter/second/launch", stackImage, firstImage)
+				image, err := exporter.Export(buildMetadata, "testdata/exporter/second/launch", stackImage, firstImage)
 				if err != nil {
 					t.Fatalf("Error: %s\n", err)
 				}
