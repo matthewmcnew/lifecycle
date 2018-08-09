@@ -36,13 +36,7 @@ func main() {
 }
 
 func build() error {
-	buildpacks, err := lifecycle.NewBuildpackMap(buildpackPath)
-	if err != nil {
-		return packs.FailErr(err, "read buildpack directory")
-	}
-	var group struct {
-		Buildpacks []string
-	}
+	var group lifecycle.BuildpackGroup
 	if _, err := toml.DecodeFile(groupPath, &group); err != nil {
 		return packs.FailErr(err, "read group")
 	}
@@ -52,7 +46,7 @@ func build() error {
 	}
 	builder := &lifecycle.Builder{
 		PlatformDir: lifecycle.DefaultPlatformDir,
-		Buildpacks:  buildpacks.FromList(group.Buildpacks),
+		Buildpacks:  group.Buildpacks,
 		In:          info,
 		Out:         os.Stdout,
 		Err:         os.Stderr,

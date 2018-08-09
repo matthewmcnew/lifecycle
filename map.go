@@ -2,7 +2,6 @@ package lifecycle
 
 import (
 	"path/filepath"
-	"strings"
 
 	"github.com/BurntSushi/toml"
 )
@@ -30,11 +29,17 @@ func NewBuildpackMap(dir string) (BuildpackMap, error) {
 	return buildpacks, nil
 }
 
-func (m BuildpackMap) FromList(l []string) []*Buildpack {
+type BuildpackMapIdVersion struct {
+	ID      string
+	Version string
+}
+
+func (m BuildpackMap) FromList(l []BuildpackMapIdVersion) []*Buildpack {
 	var out []*Buildpack
-	for _, ref := range l {
-		if !strings.Contains(ref, "@") {
-			ref += "@latest"
+	for _, i := range l {
+		ref := i.ID + "@" + i.Version
+		if i.Version == "" {
+			ref += "latest"
 		}
 		if bp, ok := m[ref]; ok {
 			out = append(out, bp)
