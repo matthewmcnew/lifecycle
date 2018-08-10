@@ -36,10 +36,16 @@ func main() {
 }
 
 func build() error {
+	buildpacks, err := lifecycle.NewBuildpackMap(buildpackPath)
+	if err != nil {
+		return packs.FailErr(err, "read buildpack directory")
+	}
 	var group lifecycle.BuildpackGroup
 	if _, err := toml.DecodeFile(groupPath, &group); err != nil {
 		return packs.FailErr(err, "read group")
 	}
+	group.Buildpacks = buildpacks.MapIn(group.Buildpacks)
+
 	info, err := ioutil.ReadFile(infoPath)
 	if err != nil {
 		return packs.FailErr(err, "read detect info")

@@ -29,13 +29,8 @@ func NewBuildpackMap(dir string) (BuildpackMap, error) {
 	return buildpacks, nil
 }
 
-type BuildpackMapIDVersion struct {
-	ID      string
-	Version string
-}
-
-func (m BuildpackMap) FromList(l []BuildpackMapIDVersion) []*Buildpack {
-	var out []*Buildpack
+func (m BuildpackMap) Map(l []*Buildpack) []*Buildpack {
+	out := make([]*Buildpack, 0, len(l))
 	for _, i := range l {
 		ref := i.ID + "@" + i.Version
 		if i.Version == "" {
@@ -44,6 +39,14 @@ func (m BuildpackMap) FromList(l []BuildpackMapIDVersion) []*Buildpack {
 		if bp, ok := m[ref]; ok {
 			out = append(out, bp)
 		}
+	}
+	return out
+}
+
+func (m BuildpackMap) MapOut(l []*Buildpack) []*SimpleBuildpack {
+	out := make([]*SimpleBuildpack, 0, len(l))
+	for _, b := range l {
+		out = append(out, &SimpleBuildpack{ID: b.ID, Version: b.Version})
 	}
 	return out
 }

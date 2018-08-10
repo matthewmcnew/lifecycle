@@ -20,11 +20,16 @@ const (
 	CodeDetectFail = 100
 )
 
+type SimpleBuildpack struct {
+	ID      string `toml:"id"`
+	Version string `toml:"version"`
+}
+
 type Buildpack struct {
-	ID      string
-	Name    string
-	Version string
-	Dir     string
+	ID      string `toml:"id"`
+	Version string `toml:"version"`
+	Name    string `toml:"name"`
+	Dir     string `toml:"-"`
 }
 
 func (bp *Buildpack) Detect(l *log.Logger, appDir string, in io.Reader, out io.Writer) int {

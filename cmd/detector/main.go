@@ -57,7 +57,7 @@ func detect() error {
 		return packs.FailErr(err, "create buildpack group file")
 	}
 	defer groupFile.Close()
-	if err := toml.NewEncoder(groupFile).Encode(convertFromLifecycleBuildpackGroup(group)); err != nil {
+	if err := toml.NewEncoder(groupFile).Encode(GroupToml{Repository: group.Repository, Buildpacks: buildpacks.MapOut(group.Buildpacks)}); err != nil {
 		return packs.FailErr(err, "write buildpack group")
 	}
 
@@ -68,40 +68,21 @@ func detect() error {
 	return nil
 }
 
-type Buildpack struct {
-	ID      string `toml:"id"`
-	Version string `toml:"version"`
-}
-
-type BuildpackGroup struct {
-	Repository string      `toml:"repository"`
-	Buildpacks []Buildpack `toml:"buildpacks"`
-}
-
 type OrderToml struct {
-	Groups []BuildpackGroup `toml:"groups"`
+	Groups lifecycle.BuildpackOrder `toml:"groups"`
+}
+type GroupToml struct {
+	Repository string
+	Buildpacks []*lifecycle.SimpleBuildpack
 }
 
 func (o *OrderToml) Order(m lifecycle.BuildpackMap) lifecycle.BuildpackOrder {
 	var bs lifecycle.BuildpackOrder
 	for _, g := range o.Groups {
-		var buildpacks []lifecycle.BuildpackMapIDVersion
-		for _, b := range g.Buildpacks {
-			buildpacks = append(buildpacks, lifecycle.BuildpackMapIDVersion(b))
-		}
 		bs = append(bs, lifecycle.BuildpackGroup{
 			Repository: g.Repository,
-			Buildpacks: m.FromList(buildpacks),
+			Buildpacks: m.Map(g.Buildpacks),
 		})
 	}
 	return bs
-}
-
-func convertFromLifecycleBuildpackGroup(group *lifecycle.BuildpackGroup) BuildpackGroup {
-	out := BuildpackGroup{Repository: group.Repository, Buildpacks: make([]Buildpack, len(group.Buildpacks))}
-	for i, b := range group.Buildpacks {
-		out.Buildpacks[i].ID = b.ID
-		out.Buildpacks[i].Version = b.Version
-	}
-	return out
 }

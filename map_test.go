@@ -66,19 +66,34 @@ func testMap(t *testing.T, when spec.G, it spec.S) {
 		})
 	})
 
-	when("#FromList", func() {
+	when("#Map", func() {
 		it("should return a list of buildpacks", func() {
 			m := lifecycle.BuildpackMap{
 				"buildpack1@version1.1": {Name: "buildpack1-1.1"},
 				"buildpack1@version1.2": {Name: "buildpack1-1.2"},
 				"buildpack2@latest":     {Name: "buildpack2"},
 			}
-			if l := m.FromList([]lifecycle.BuildpackMapIdVersion{
+			if l := m.Map([]*lifecycle.Buildpack{
 				{ID: "buildpack1", Version: "version1.1"},
 				{ID: "buildpack2", Version: ""},
 			}); !reflect.DeepEqual(l, []*lifecycle.Buildpack{
 				{Name: "buildpack1-1.1"},
 				{Name: "buildpack2"},
+			}) {
+				t.Fatalf("Unexpected list: %#v\n", l)
+			}
+		})
+	})
+
+	when("#MapOut", func() {
+		it("should return a list of buildpacks", func() {
+			m := lifecycle.BuildpackMap{}
+			if l := m.MapOut([]*lifecycle.Buildpack{
+				{ID: "buildpack1", Version: "version1.1", Name: "something", Dir: "something"},
+				{ID: "buildpack2", Version: "", Name: "something", Dir: "something"},
+			}); !reflect.DeepEqual(l, []*lifecycle.SimpleBuildpack{
+				{ID: "buildpack1", Version: "version1.1"},
+				{ID: "buildpack2", Version: ""},
 			}) {
 				t.Fatalf("Unexpected list: %#v\n", l)
 			}
