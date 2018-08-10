@@ -29,12 +29,12 @@ func NewBuildpackMap(dir string) (BuildpackMap, error) {
 	return buildpacks, nil
 }
 
-type BuildpackMapIdVersion struct {
+type BuildpackMapIDVersion struct {
 	ID      string
 	Version string
 }
 
-func (m BuildpackMap) FromList(l []BuildpackMapIdVersion) []*Buildpack {
+func (m BuildpackMap) FromList(l []BuildpackMapIDVersion) []*Buildpack {
 	var out []*Buildpack
 	for _, i := range l {
 		ref := i.ID + "@" + i.Version
