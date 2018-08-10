@@ -6,7 +6,6 @@ import (
 	"log"
 	"os"
 
-	"github.com/BurntSushi/toml"
 	"github.com/buildpack/packs"
 
 	"github.com/buildpack/lifecycle"
@@ -36,28 +35,23 @@ func main() {
 }
 
 func detect() error {
+	log := log.New(os.Stderr, "", log.LstdFlags)
+
 	buildpacks, err := lifecycle.NewBuildpackMap(buildpackPath)
 	if err != nil {
 		return packs.FailErr(err, "read buildpack directory")
 	}
-
-	var order OrderToml
-	if _, err := toml.DecodeFile(orderPath, &order); err != nil {
-		return packs.FailErr(err, "read buildpack order")
+	order, err := buildpacks.ReadOrder(orderPath)
+	if err != nil {
+		return packs.FailErr(err, "read buildpack order file")
 	}
 
-	log := log.New(os.Stderr, "", log.LstdFlags)
-	info, group := order.Order(buildpacks).Detect(log, lifecycle.DefaultAppDir)
+	info, group := order.Detect(log, lifecycle.DefaultAppDir)
 	if len(group.Buildpacks) == 0 {
 		return packs.FailCode(packs.CodeFailedDetect, "detect")
 	}
 
-	groupFile, err := os.Create(groupPath)
-	if err != nil {
-		return packs.FailErr(err, "create buildpack group file")
-	}
-	defer groupFile.Close()
-	if err := toml.NewEncoder(groupFile).Encode(GroupToml{Repository: group.Repository, Buildpacks: buildpacks.MapOut(group.Buildpacks)}); err != nil {
+	if err := group.Write(groupPath); err != nil {
 		return packs.FailErr(err, "write buildpack group")
 	}
 
@@ -66,23 +60,4 @@ func detect() error {
 	}
 
 	return nil
-}
-
-type OrderToml struct {
-	Groups lifecycle.BuildpackOrder `toml:"groups"`
-}
-type GroupToml struct {
-	Repository string
-	Buildpacks []*lifecycle.SimpleBuildpack
-}
-
-func (o *OrderToml) Order(m lifecycle.BuildpackMap) lifecycle.BuildpackOrder {
-	var bs lifecycle.BuildpackOrder
-	for _, g := range o.Groups {
-		bs = append(bs, lifecycle.BuildpackGroup{
-			Repository: g.Repository,
-			Buildpacks: m.Map(g.Buildpacks),
-		})
-	}
-	return bs
 }

@@ -4,6 +4,8 @@ import (
 	"path/filepath"
 
 	"github.com/BurntSushi/toml"
+	"github.com/buildpack/lifecycle"
+	"github.com/buildpack/packs"
 )
 
 type BuildpackMap map[string]*Buildpack
@@ -29,7 +31,7 @@ func NewBuildpackMap(dir string) (BuildpackMap, error) {
 	return buildpacks, nil
 }
 
-func (m BuildpackMap) Map(l []*Buildpack) []*Buildpack {
+func (m BuildpackMap) map(l []*Buildpack) []*Buildpack {
 	out := make([]*Buildpack, 0, len(l))
 	for _, i := range l {
 		ref := i.ID + "@" + i.Version
@@ -43,10 +45,40 @@ func (m BuildpackMap) Map(l []*Buildpack) []*Buildpack {
 	return out
 }
 
-func (m BuildpackMap) MapOut(l []*Buildpack) []*SimpleBuildpack {
-	out := make([]*SimpleBuildpack, 0, len(l))
-	for _, b := range l {
-		out = append(out, &SimpleBuildpack{ID: b.ID, Version: b.Version})
+func (m BuildpackMap) ReadOrder(orderPath string) (BuildpackOrder, error) {
+	var order struct {
+		Groups BuildpackOrder `toml:"groups"`
 	}
-	return out
+	if _, err := toml.DecodeFile(orderPath, &order); err != nil {
+		return nil, packs.FailErr(err, "read buildpack order")
+	}
+
+	var groups lifecycle.BuildpackOrder
+	for _, g := range order.Groups {
+		groups = append(groups, lifecycle.BuildpackGroup{
+			Repository: g.Repository,
+			Buildpacks: m.map(g.Buildpacks),
+		})
+	}
+	return groups, nil
+}
+
+func (g *BuildpackGroup) Write(path string) error {
+	buildpacks := make([]*SimpleBuildpack, 0, len(g.Buildpacks))
+	for _, b := range g.Buildpacks {
+		buildpacks = append(buildpacks, &SimpleBuildpack{ID: b.ID, Version: b.Version})
+	}
+
+	data := GroupToml{Repository: group.Repository, Buildpacks: buildpacks}
+
+	return lifecycle.WriteTOML(path, data)
+}
+
+func (m BuildpackMap) ReadGroup(path string) (BuildpackGroup, error) {
+	var group BuildpackGroup
+	if _, err := toml.DecodeFile(path, &group); err != nil {
+		return nil, err
+	}
+	group.Buildpacks = m.map(group.Buildpacks)
+	return groups, nil
 }
