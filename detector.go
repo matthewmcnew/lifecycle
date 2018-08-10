@@ -62,8 +62,8 @@ func (bp *Buildpack) Detect(l *log.Logger, appDir string, in io.Reader, out io.W
 }
 
 type BuildpackGroup struct {
-	Buildpacks []*Buildpack
-	Repository string
+	Buildpacks []*Buildpack `toml:"buildpacks"`
+	Repository string       `toml:"repository"`
 }
 
 func (bg *BuildpackGroup) Detect(l *log.Logger, appDir string) (info []byte, ok bool) {
