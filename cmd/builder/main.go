@@ -44,7 +44,7 @@ func build() error {
 	if _, err := toml.DecodeFile(groupPath, &group); err != nil {
 		return packs.FailErr(err, "read group")
 	}
-	group.Buildpacks = buildpacks.MapIn(group.Buildpacks)
+	group.Buildpacks = buildpacks.Map(group.Buildpacks)
 
 	info, err := ioutil.ReadFile(infoPath)
 	if err != nil {
