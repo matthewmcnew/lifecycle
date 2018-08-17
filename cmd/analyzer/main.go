@@ -62,6 +62,12 @@ func analyzer() error {
 		return nil
 	}
 
+	if _, err := origImage.RawManifest(); err != nil {
+		// Assume error is due to non-existent image
+		// This is necessary for registries
+		return nil
+	}
+
 	analyzer := &lifecycle.Analyzer{
 		Buildpacks: group.Buildpacks,
 		Out:        os.Stdout,

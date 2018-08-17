@@ -2,6 +2,7 @@ package main
 
 import (
 	"flag"
+	"fmt"
 	"io/ioutil"
 	"os"
 
@@ -38,10 +39,12 @@ func build() error {
 	if err != nil {
 		return packs.FailErr(err, "read buildpack directory")
 	}
+	fmt.Println("GroupPath:", groupPath)
 	group, err := buildpacks.ReadGroup(groupPath)
 	if err != nil {
 		return packs.FailErr(err, "read group")
 	}
+	fmt.Println("Group:", group)
 
 	info, err := ioutil.ReadFile(infoPath)
 	if err != nil {

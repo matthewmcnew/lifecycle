@@ -2,6 +2,7 @@ package lifecycle
 
 import (
 	"bytes"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"os"
@@ -39,9 +40,14 @@ type LaunchTOML struct {
 type BuildMetadata LaunchTOML
 
 func (b *Builder) Build(appDir, cacheDir, launchDir string, env BuildEnv) (*BuildMetadata, error) {
+	fmt.Println("DAVE BUILD:", appDir, cacheDir, launchDir, env)
+	fmt.Printf("DAVE B: %#v\n", b)
+
 	procMap := processMap{}
 	var buildpackIDs []string
 	for _, bp := range b.Buildpacks {
+		fmt.Printf("DAVE BP: %#v\n", bp)
+
 		bpLaunchDir := filepath.Join(launchDir, bp.ID)
 		bpCacheDir := filepath.Join(cacheDir, bp.ID)
 		buildpackIDs = append(buildpackIDs, bp.ID)

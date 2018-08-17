@@ -1,6 +1,7 @@
 package lifecycle
 
 import (
+	"fmt"
 	"path/filepath"
 
 	"github.com/BurntSushi/toml"
@@ -26,17 +27,21 @@ func NewBuildpackMap(dir string) (BuildpackMap, error) {
 		}
 		buildpack.Dir = buildpackDir
 		buildpacks[id+"@"+version] = &buildpack
+		// TODO unit test if useful
+		buildpacks[buildpack.ID+"@"+buildpack.Version] = &buildpack
 	}
 	return buildpacks, nil
 }
 
 func (m BuildpackMap) mapFull(l []*Buildpack) []*Buildpack {
+	fmt.Printf("MAP: %#v\n", m)
 	out := make([]*Buildpack, 0, len(l))
 	for _, i := range l {
 		ref := i.ID + "@" + i.Version
 		if i.Version == "" {
 			ref += "latest"
 		}
+		fmt.Println("DAVE LOOKUP:", ref)
 		if bp, ok := m[ref]; ok {
 			out = append(out, bp)
 		}
@@ -84,6 +89,8 @@ func (m BuildpackMap) ReadGroup(path string) (BuildpackGroup, error) {
 	if _, err := toml.DecodeFile(path, &group); err != nil {
 		return BuildpackGroup{}, err
 	}
+	fmt.Printf("PRE CONV: %#v\n", group)
 	group.Buildpacks = m.mapFull(group.Buildpacks)
+	fmt.Printf("POST CONV: %#v\n", group)
 	return group, nil
 }
