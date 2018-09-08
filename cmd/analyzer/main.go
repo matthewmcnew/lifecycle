@@ -2,10 +2,8 @@ package main
 
 import (
 	"encoding/json"
-	"errors"
 	"flag"
 	"fmt"
-	"io/ioutil"
 	"log"
 	"os"
 
@@ -56,15 +54,9 @@ func analyzer() error {
 
 	if metadataOnStdin {
 		config := packs.BuildMetadata{}
-		txt, err := ioutil.ReadAll(os.Stdin)
-		if err != nil {
-			return packs.FailErrCode(errors.New("reading stdin"), packs.CodeFailedBuild)
-		}
-		fmt.Println("txt:", string(txt))
-		if err := json.Unmarshal(txt, &config); err != nil {
+		if err := json.NewDecoder(os.Stdin).Decode(&config); err != nil {
 			return packs.FailErrCode(err, packs.CodeFailedBuild)
 		}
-		fmt.Printf("CONFIG: %#v\n", config)
 		if err := analyzer.Analyze(launchDir, nil, &config); err != nil {
 			return packs.FailErrCode(err, packs.CodeFailedBuild)
 		}
