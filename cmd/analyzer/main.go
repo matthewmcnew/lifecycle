@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"flag"
+	"fmt"
 	"os"
 
 	"log"
@@ -36,7 +37,7 @@ func main() {
 	flag.Parse()
 	repoName = flag.Arg(0)
 	if flag.NArg() > 1 || repoName == "" || launchDir == "" {
-		packs.Exit(packs.FailCode(packs.CodeInvalidArgs, "parse arguments"))
+		packs.Exit(packs.FailCode(packs.CodeInvalidArgs, fmt.Sprintf("parse arguments: %d ; '%s' ; '%s'", flag.NArg(), repoName, launchDir)))
 	}
 	packs.Exit(analyzer())
 }
