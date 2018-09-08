@@ -17,10 +17,17 @@ type Analyzer struct {
 	Out, Err   io.Writer
 }
 
-func (a *Analyzer) Analyze(launchDir string, image v1.Image) error {
-	config, err := a.getBuildMetadata(image)
-	if err != nil {
-		return err
+func (a *Analyzer) Analyze(launchDir string, image v1.Image, config *packs.BuildMetadata) error {
+	if config == nil {
+		var err error
+		config, err = a.getBuildMetadata(image)
+		if err != nil {
+			return err
+		}
+		if config == nil {
+			// no previous data
+			return nil
+		}
 	}
 
 	buildpacks := a.buildpacks()
@@ -39,19 +46,19 @@ func (a *Analyzer) Analyze(launchDir string, image v1.Image) error {
 	return nil
 }
 
-func (a *Analyzer) getBuildMetadata(image v1.Image) (packs.BuildMetadata, error) {
+func (a *Analyzer) getBuildMetadata(image v1.Image) (*packs.BuildMetadata, error) {
 	configFile, err := image.ConfigFile()
 	if err != nil {
-		return packs.BuildMetadata{}, err
+		return nil, err
 	}
 	jsonConfig := configFile.Config.Labels[packs.BuildLabel]
 	if jsonConfig == "" {
-		return packs.BuildMetadata{}, nil
+		return nil, nil
 	}
 
-	config := packs.BuildMetadata{}
-	if err := json.Unmarshal([]byte(jsonConfig), &config); err != nil {
-		return packs.BuildMetadata{}, err
+	config := &packs.BuildMetadata{}
+	if err := json.Unmarshal([]byte(jsonConfig), config); err != nil {
+		return nil, err
 	}
 
 	return config, err

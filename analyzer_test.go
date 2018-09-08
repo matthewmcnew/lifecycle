@@ -56,6 +56,8 @@ func testAnalyzer(t *testing.T, when spec.G, it spec.S) {
 	})
 
 	when("#Analyze", func() {
+		when.Pend("config is passed in", func() {})
+
 		when("image exists and has labels", func() {
 			it.Before(func() {
 				var configFile = &v1.ConfigFile{}
@@ -86,7 +88,7 @@ func testAnalyzer(t *testing.T, when spec.G, it spec.S) {
 			})
 
 			it("should use labels to populate the launch dir", func() {
-				if err := analyzer.Analyze(launchDir, image); err != nil {
+				if err := analyzer.Analyze(launchDir, image, nil); err != nil {
 					t.Fatalf("Error: %s\n", err)
 				}
 
@@ -111,7 +113,7 @@ func testAnalyzer(t *testing.T, when spec.G, it spec.S) {
 			})
 
 			it("should do nothing and succeed", func() {
-				if err := analyzer.Analyze(launchDir, image); err != nil {
+				if err := analyzer.Analyze(launchDir, image, nil); err != nil {
 					t.Fatalf("Error: %s\n", err)
 				}
 			})
@@ -146,7 +148,7 @@ func testAnalyzer(t *testing.T, when spec.G, it spec.S) {
 			it("should only write layer TOML files that correspond to detected buildpacks", func() {
 				analyzer.Buildpacks = []*lifecycle.Buildpack{{ID: "buildpack.go"}}
 
-				if err := analyzer.Analyze(launchDir, image); err != nil {
+				if err := analyzer.Analyze(launchDir, image, nil); err != nil {
 					t.Fatalf("Error: %s\n", err)
 				}
 

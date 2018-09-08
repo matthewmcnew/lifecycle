@@ -1,23 +1,26 @@
 package main
 
 import (
+	"encoding/json"
 	"flag"
 	"os"
+
+	"log"
 
 	"github.com/BurntSushi/toml"
 	"github.com/buildpack/lifecycle"
 	"github.com/buildpack/packs"
 	"github.com/buildpack/packs/img"
 	"github.com/google/go-containerregistry/pkg/v1/remote"
-	"log"
 )
 
 var (
-	repoName   string
-	useDaemon  bool
-	useHelpers bool
-	groupPath  string
-	launchDir  string
+	repoName        string
+	useDaemon       bool
+	useHelpers      bool
+	groupPath       string
+	launchDir       string
+	metadataOnStdin bool
 )
 
 func init() {
@@ -26,6 +29,7 @@ func init() {
 	packs.InputUseHelpers(&useHelpers)
 
 	flag.StringVar(&launchDir, "launch", "/launch", "launch directory")
+	flag.BoolVar(&metadataOnStdin, "metadata-on-stdin", false, "read metadata from stdin (instead of image)")
 }
 
 func main() {
@@ -38,17 +42,32 @@ func main() {
 }
 
 func analyzer() error {
+	var group lifecycle.BuildpackGroup
+	if _, err := toml.DecodeFile(groupPath, &group); err != nil {
+		return packs.FailErr(err, "read group")
+	}
+	analyzer := &lifecycle.Analyzer{
+		Buildpacks: group.Buildpacks,
+		Out:        os.Stdout,
+		Err:        os.Stderr,
+	}
+
+	if metadataOnStdin {
+		config := packs.BuildMetadata{}
+		if err := json.NewDecoder(os.Stdin).Decode(&config); err != nil {
+			return packs.FailErrCode(err, packs.CodeFailedBuild)
+		}
+		if err := analyzer.Analyze(launchDir, nil, &config); err != nil {
+			return packs.FailErrCode(err, packs.CodeFailedBuild)
+		}
+		return nil
+	}
+
 	if useHelpers {
 		if err := img.SetupCredHelpers(repoName); err != nil {
 			return packs.FailErr(err, "setup credential helpers")
 		}
 	}
-
-	var group lifecycle.BuildpackGroup
-	if _, err := toml.DecodeFile(groupPath, &group); err != nil {
-		return packs.FailErr(err, "read group")
-	}
-
 	newRepoStore := img.NewRegistry
 	if useDaemon {
 		newRepoStore = img.NewDaemon
@@ -75,16 +94,7 @@ func analyzer() error {
 		return packs.FailErr(err, "access manifest", repoName)
 	}
 
-	analyzer := &lifecycle.Analyzer{
-		Buildpacks: group.Buildpacks,
-		Out:        os.Stdout,
-		Err:        os.Stderr,
-	}
-	err = analyzer.Analyze(
-		launchDir,
-		origImage,
-	)
-	if err != nil {
+	if err := analyzer.Analyze(launchDir, origImage, nil); err != nil {
 		return packs.FailErrCode(err, packs.CodeFailedBuild)
 	}
 
