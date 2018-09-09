@@ -15,12 +15,12 @@ import (
 )
 
 var (
-	repoName        string
-	useDaemon       bool
-	useHelpers      bool
-	groupPath       string
-	launchDir       string
-	metadataOnStdin bool
+	repoName   string
+	useDaemon  bool
+	useHelpers bool
+	groupPath  string
+	launchDir  string
+	metadata   string
 )
 
 func init() {
@@ -29,7 +29,7 @@ func init() {
 	packs.InputUseHelpers(&useHelpers)
 
 	flag.StringVar(&launchDir, "launch", "/launch", "launch directory")
-	flag.BoolVar(&metadataOnStdin, "metadata-on-stdin", false, "read metadata from stdin (instead of image)")
+	flag.StringVar(&metadata, "metadata", "", "read metadata from file path (instead of image)")
 }
 
 func main() {
@@ -52,11 +52,17 @@ func analyzer() error {
 		Err:        os.Stderr,
 	}
 
-	if metadataOnStdin {
+	if metadata != "" {
 		config := packs.BuildMetadata{}
-		if err := json.NewDecoder(os.Stdin).Decode(&config); err != nil {
+		fh, err := os.Open(metadata)
+		if err != nil {
 			return packs.FailErrCode(err, packs.CodeFailedBuild)
 		}
+		defer fh.Close()
+		if err := json.NewDecoder(fh).Decode(&config); err != nil {
+			return packs.FailErrCode(err, packs.CodeFailedBuild)
+		}
+		fh.Close()
 		if err := analyzer.Analyze(launchDir, nil, &config); err != nil {
 			return packs.FailErrCode(err, packs.CodeFailedBuild)
 		}
