@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"io/ioutil"
 	"log"
 	"os"
 
@@ -53,16 +54,16 @@ func analyzer() error {
 	}
 
 	if metadata != "" {
+		fmt.Printf("METADATA: %s\n", metadata)
 		config := packs.BuildMetadata{}
-		fh, err := os.Open(metadata)
+		txt, err := ioutil.ReadFile(metadata)
 		if err != nil {
 			return packs.FailErrCode(err, packs.CodeFailedBuild)
 		}
-		defer fh.Close()
-		if err := json.NewDecoder(fh).Decode(&config); err != nil {
+		fmt.Printf("METADATA: %s: %s\n", metadata, string(txt))
+		if err := json.Unmarshal(txt, &config); err != nil {
 			return packs.FailErrCode(err, packs.CodeFailedBuild)
 		}
-		fh.Close()
 		if err := analyzer.Analyze(launchDir, nil, &config); err != nil {
 			return packs.FailErrCode(err, packs.CodeFailedBuild)
 		}
