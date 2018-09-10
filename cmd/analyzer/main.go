@@ -54,13 +54,11 @@ func analyzer() error {
 	}
 
 	if metadata != "" {
-		fmt.Printf("METADATA: %s\n", metadata)
 		config := packs.BuildMetadata{}
 		txt, err := ioutil.ReadFile(metadata)
 		if err != nil {
 			return packs.FailErrCode(err, packs.CodeFailedBuild)
 		}
-		fmt.Printf("METADATA: %s: %s\n", metadata, string(txt))
 		if err := json.Unmarshal(txt, &config); err != nil {
 			return packs.FailErrCode(err, packs.CodeFailedBuild)
 		}
