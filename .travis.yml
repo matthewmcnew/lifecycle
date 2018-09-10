@@ -21,7 +21,7 @@ jobs:
     - secure: "McMI5lalBxrsns6ZlekhwqQM0y8h2db3M49KppGVgCD3ShsKubQ14RLRT8tqs60f+UBVzEaMarqNXcSLcCiegH+gMbJazYGVog3vVt8m1AbQEQiSecuQ3GRW00jrjPOU82wJPmj3Xw/L4Pi9PKN+Fmol802gbZMQ69OhLAjiNic0jW+HJ4ZFxrD2ns4BmdMeBURGamZeyMsG3ISzgGfl+LoanV92N7de2bRl3tG88qquyrlVjOK5G+wmp+AK+LdeDly94kSrq1/Pgvpq5xIjK+5bdtn5cIEWaMPtfeKMU+UQjIWVWWU4BQ6ZdktKz6BumP1VGyP9JfNdH269e6UG/KM75QQEDAsv9Daq/oy2WEKMjs4LGv9OOsdzwPRrxOt+EWHwVOOXOXfhYMw5v250naqXAsZmO4PsUqmz8JsTuIVRttZX761d4f/JuPNpeE7GgxTc9D4VxziIl6ksDHrpRRQW4Hc4fznhBsUF7lyomCrwAWYSsZP4YBTYdykgKf0nNmf+iskzoIZfPuvzvWIim0K+ax5vp9B9ocd1mwQd5zPoAoYZRGhipw7d2hbkf8h8dakKdY8y/nBzomfXW1+4LFuuKSyELZg0z0rGu4t/jW6gHuILGCvPqBtCNIRTQSvLwk7Gzt/lKqZOv9P6Luh/UCI+mq+/lWyBy9zYUP0Swpc="
     script:
     - images/bin/build -v "0.0.1-rc.$TRAVIS_BUILD_NUMBER"
-    - echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin
+    - echo "$DOCKER_PASSWORD" | docker login --username "$DOCKER_USERNAME" --password-stdin
     - docker push "packs/base:0.0.1-rc.$TRAVIS_BUILD_NUMBER"
     - docker push "packs/build:0.0.1-rc.$TRAVIS_BUILD_NUMBER"
     - docker push "packs/run:0.0.1-rc.$TRAVIS_BUILD_NUMBER"
