@@ -33,5 +33,5 @@ type LayerMetadata struct {
 
 type RunImageMetadata struct {
 	TopLayer string `json:"topLayer"`
-	SHA      string `json:"sha"`
+	SHA      string `json:"sha,omitempty"`
 }
