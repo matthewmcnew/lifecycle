@@ -10,19 +10,19 @@ import (
 	"math/rand"
 	"os"
 	"os/user"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/buildpack/lifecycle"
+	"github.com/buildpack/lifecycle/img"
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-containerregistry/pkg/v1"
 	"github.com/google/go-containerregistry/pkg/v1/mutate"
 	"github.com/sclevine/spec"
 	"github.com/sclevine/spec/report"
-
-	"github.com/buildpack/lifecycle"
-	"github.com/buildpack/lifecycle/img"
 )
 
 func TestExporter(t *testing.T) {
@@ -58,6 +58,65 @@ func testExporter(t *testing.T, when spec.G, it spec.S) {
 		if err := os.RemoveAll(tmpDir); err != nil {
 			t.Fatal(err)
 		}
+	})
+
+	when("#Stage1", func() {
+		var (
+			runImage            v1.Image
+			runImageLayerDigest v1.Hash
+			runImageDigest      v1.Hash
+		)
+
+		it.Before(func() {
+			var err error
+			runImage, err = getBusyboxWithEntrypoint()
+			assertNil(t, err)
+			runImageLayerDigest, err = topLayer(runImage)
+			assertNil(t, err)
+			runImageDigest, err = runImage.Digest()
+			assertNil(t, err)
+		})
+
+		it("creates fs representation of image", func() {
+			dir, err := exporter.Stage1("testdata/exporter/first/launch", "/launch/dest", runImage)
+			assertNil(t, err)
+			var metadata lifecycle.AppImageMetadata
+			b, err := ioutil.ReadFile(filepath.Join(dir, "metadata.json"))
+			assertNil(t, err)
+			assertNil(t, json.Unmarshal(b, &metadata))
+
+			t.Log("generates app tar")
+			assertTarFileContents(t,
+				filepath.Join(dir, strings.Replace(metadata.App.SHA, "sha256:", "", -1)+".tar"),
+				"/launch/dest/app/.hidden.txt", "some-hidden-text\n")
+
+			t.Log("generate config tar")
+			assertTarFileContents(t,
+				filepath.Join(dir, strings.Replace(metadata.Config.SHA, "sha256:", "", -1)+".tar"),
+				"/launch/dest/config/metadata.toml", "[[processes]]\n  type = \"web\"\n  command = \"npm start\"\n")
+
+			t.Log("generates buildpacks layers")
+			assertEq(t, len(metadata.Buildpacks), 1)
+			assertTarFileContents(t,
+				filepath.Join(dir, strings.Replace(metadata.Buildpacks[0].Layers["layer1"].SHA, "sha256:", "", -1)+".tar"),
+				"/launch/dest/buildpack.id/layer1/file-from-layer-1", "echo text from layer 1\n")
+			assertEq(t,
+				metadata.Buildpacks[0].Layers["layer1"].Data,
+				map[string]interface{}{
+					"mykey": "myval",
+				})
+
+			assertTarFileContents(t,
+				filepath.Join(dir, strings.Replace(metadata.Buildpacks[0].Layers["layer2"].SHA, "sha256:", "", -1)+".tar"),
+				"/launch/dest/buildpack.id/layer2/file-from-layer-2", "echo text from layer 2\n")
+			assertEq(t,
+				metadata.Buildpacks[0].Layers["layer2"].Data,
+				map[string]interface{}{})
+
+			t.Log("sets run image metadata")
+			assertEq(t, metadata.RunImage.TopLayer, runImageLayerDigest.String())
+			assertEq(t, metadata.RunImage.SHA, runImageDigest.String())
+		})
 	})
 
 	when("#Export", func() {
@@ -183,12 +242,12 @@ func testExporter(t *testing.T, when spec.G, it spec.S) {
 				}
 
 				// Directory
-				if uid, gid, err := getImageFileOwner(image, data.App.SHA, "/launch/dest/app/subdir"); err != nil {
+				if uid, gid, err := getImageFileOwner(image, data.App.SHA, "/launch/dest/app/subdir/"); err != nil {
 					t.Fatalf("Error: %s\n", err)
 				} else if diff := cmp.Diff(uid, 1234); diff != "" {
-					t.Fatalf(`/launch/dest/app/subdir: (-got +want)\n%s`, diff)
+					t.Fatalf(`/launch/dest/app/subdir/: (-got +want)\n%s`, diff)
 				} else if diff := cmp.Diff(gid, 5678); diff != "" {
-					t.Fatalf(`/launch/dest/app/subdir: (-got +want)\n%s`, diff)
+					t.Fatalf(`/launch/dest/app/subdir/: (-got +want)\n%s`, diff)
 				}
 			})
 		})
@@ -375,4 +434,27 @@ func envVar(image v1.Image, key string) (string, error) {
 		}
 	}
 	return "", fmt.Errorf("image ENV did not contain variable '%s'", key)
+}
+
+func assertTarFileContents(t *testing.T, tarfile, path, expected string) {
+	r, err := os.Open(tarfile)
+	assertNil(t, err)
+	defer r.Close()
+
+	tr := tar.NewReader(r)
+	for {
+		header, err := tr.Next()
+		if err == io.EOF {
+			break
+		}
+		assertNil(t, err)
+
+		if header.Name == path {
+			buf, err := ioutil.ReadAll(tr)
+			assertNil(t, err)
+			assertEq(t, string(buf), expected)
+			return
+		}
+	}
+	t.Fatalf("%s does not exist in %s", path, tarfile)
 }

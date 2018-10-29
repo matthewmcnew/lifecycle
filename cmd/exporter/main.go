@@ -18,6 +18,7 @@ var (
 	runImage     string
 	launchDir    string
 	launchDirSrc string
+	dryrun       string
 	groupPath    string
 	useDaemon    bool
 	useHelpers   bool
@@ -29,6 +30,7 @@ func init() {
 	cmd.FlagRunImage(&runImage)
 	cmd.FlagLaunchDir(&launchDir)
 	cmd.FlagLaunchDirSrc(&launchDirSrc)
+	cmd.FlagDryRunDir(&dryrun)
 	cmd.FlagGroupPath(&groupPath)
 	cmd.FlagUseDaemon(&useDaemon)
 	cmd.FlagUseCredHelpers(&useHelpers)
@@ -39,7 +41,7 @@ func init() {
 func main() {
 	flag.Parse()
 	if flag.NArg() > 1 || flag.Arg(0) == "" || runImage == "" {
-		args := map[string]interface{}{"narg": flag.NArg, "runImage": runImage, "launchDir": launchDir}
+		args := map[string]interface{}{"narg": flag.NArg(), "runImage": runImage, "launchDir": launchDir}
 		cmd.Exit(cmd.FailCode(cmd.CodeInvalidArgs, "parse arguments", fmt.Sprintf("%+v", args)))
 	}
 	repoName = flag.Arg(0)
@@ -89,32 +91,49 @@ func export() error {
 		return cmd.FailErr(err, "read group")
 	}
 
-	tmpDir, err := ioutil.TempDir("", "lifecycle.exporter.layer")
-	if err != nil {
-		return cmd.FailErr(err, "create temp directory")
-	}
-	defer os.RemoveAll(tmpDir)
-
 	exporter := &lifecycle.Exporter{
 		Buildpacks: group.Buildpacks,
-		TmpDir:     tmpDir,
 		Out:        os.Stdout,
 		Err:        os.Stderr,
 		UID:        uid,
 		GID:        gid,
 	}
-	newImage, err := exporter.Export(
-		launchDirSrc,
-		launchDir,
-		stackImage,
-		origImage,
-	)
-	if err != nil {
-		return cmd.FailErrCode(err, cmd.CodeFailedBuild)
-	}
 
-	if err := repoStore.Write(newImage); err != nil {
-		return cmd.FailErrCode(err, cmd.CodeFailedUpdate, "write")
+	if dryrun != "" {
+		// TODO : I'm not sure I like the strategy I used here, dryrun dir as tmpdir ???
+		exporter.TmpDir = dryrun
+		if err := os.MkdirAll(exporter.TmpDir, 0777); err != nil {
+			return cmd.FailErrCode(err, cmd.CodeFailedBuild)
+		}
+		// TODO : Emily, why doesn't Stage1 require origImage ???
+		_, err := exporter.Stage1(
+			launchDirSrc,
+			launchDir,
+			stackImage,
+		)
+		if err != nil {
+			return cmd.FailErrCode(err, cmd.CodeFailedBuild)
+		}
+	} else {
+		exporter.TmpDir, err = ioutil.TempDir("", "lifecycle.exporter.layer")
+		if err != nil {
+			return cmd.FailErr(err, "create temp directory")
+		}
+		defer os.RemoveAll(exporter.TmpDir)
+
+		newImage, err := exporter.Export(
+			launchDirSrc,
+			launchDir,
+			stackImage,
+			origImage,
+		)
+		if err != nil {
+			return cmd.FailErrCode(err, cmd.CodeFailedBuild)
+		}
+
+		if err := repoStore.Write(newImage); err != nil {
+			return cmd.FailErrCode(err, cmd.CodeFailedUpdate, "write")
+		}
 	}
 
 	return nil
