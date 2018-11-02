@@ -104,7 +104,6 @@ func export() error {
 		if err := os.MkdirAll(exporter.TmpDir, 0777); err != nil {
 			return cmd.FailErrCode(err, cmd.CodeFailedBuild)
 		}
-		// TODO : Emily, why doesn't Stage1 require origImage ???
 		_, err := exporter.Stage1(
 			launchDirSrc,
 			launchDir,
