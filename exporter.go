@@ -5,7 +5,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"github.com/docker/docker/pkg/idtools"
 	"io"
 	"io/ioutil"
 	"os"
@@ -15,6 +14,7 @@ import (
 	"github.com/BurntSushi/toml"
 	"github.com/buildpack/lifecycle/img"
 	"github.com/docker/docker/pkg/archive"
+	"github.com/docker/docker/pkg/idtools"
 	"github.com/google/go-containerregistry/pkg/v1"
 	"github.com/google/go-containerregistry/pkg/v1/mutate"
 	"github.com/pkg/errors"
@@ -29,7 +29,7 @@ type Exporter struct {
 }
 
 func (e *Exporter) Export(launchDirSrc, launchDirDst string, runImage, origImage v1.Image) (v1.Image, error) {
-	dir, err := e.Stage1(launchDirSrc, launchDirDst, runImage)
+	dir, err := e.Stage1(launchDirSrc, launchDirDst)
 	if err != nil {
 		return nil, err
 	}
@@ -38,13 +38,9 @@ func (e *Exporter) Export(launchDirSrc, launchDirDst string, runImage, origImage
 
 // TODO: Convert from input having runImage as v1.Image and instead pass in run image metadata and
 //       previous metadata. This means the metadata.json is now fully baked
-func (e *Exporter) Stage1(launchDirSrc, launchDirDst string, runImage v1.Image) (string, error) {
+func (e *Exporter) Stage1(launchDirSrc, launchDirDst string) (string, error) {
 	var err error
 	var metadata AppImageMetadata
-
-	if err := addRunImageMetadata(runImage, &metadata); err != nil {
-		return "", err
-	}
 
 	metadata.App.SHA, err = e.exportTar(launchDirSrc, launchDirDst, "app")
 	if err != nil {
@@ -111,6 +107,10 @@ func (e *Exporter) Stage2(exportDir, launchDirDst string, runImage, origImage v1
 	if err := json.Unmarshal(data, &metadata); err != nil {
 		return nil, err
 	}
+	if err := addRunImageMetadata(runImage, &metadata); err != nil {
+		return nil, err
+	}
+
 	repoImage, _, err := img.Append(runImage, filepath.Join(exportDir, fmt.Sprintf("%s.tar", rawSHA(metadata.App.SHA))))
 	if err != nil {
 		return nil, errors.Wrap(err, "append app layer")

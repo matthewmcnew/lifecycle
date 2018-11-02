@@ -61,24 +61,8 @@ func testExporter(t *testing.T, when spec.G, it spec.S) {
 	})
 
 	when("#Stage1", func() {
-		var (
-			runImage            v1.Image
-			runImageLayerDigest v1.Hash
-			runImageDigest      v1.Hash
-		)
-
-		it.Before(func() {
-			var err error
-			runImage, err = getBusyboxWithEntrypoint()
-			assertNil(t, err)
-			runImageLayerDigest, err = topLayer(runImage)
-			assertNil(t, err)
-			runImageDigest, err = runImage.Digest()
-			assertNil(t, err)
-		})
-
 		it("creates fs representation of image", func() {
-			dir, err := exporter.Stage1("testdata/exporter/first/launch", "/launch/dest", runImage)
+			dir, err := exporter.Stage1("testdata/exporter/first/launch", "/launch/dest")
 			assertNil(t, err)
 			var metadata lifecycle.AppImageMetadata
 			b, err := ioutil.ReadFile(filepath.Join(dir, "metadata.json"))
@@ -112,10 +96,6 @@ func testExporter(t *testing.T, when spec.G, it spec.S) {
 			assertEq(t,
 				metadata.Buildpacks[0].Layers["layer2"].Data,
 				map[string]interface{}{})
-
-			t.Log("sets run image metadata")
-			assertEq(t, metadata.RunImage.TopLayer, runImageLayerDigest.String())
-			assertEq(t, metadata.RunImage.SHA, runImageDigest.String())
 		})
 	})
 
