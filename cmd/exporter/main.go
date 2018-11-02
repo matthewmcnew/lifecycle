@@ -114,19 +114,6 @@ func export() error {
 		origImage = nil
 	}
 
-	var group lifecycle.BuildpackGroup
-	if _, err := toml.DecodeFile(groupPath, &group); err != nil {
-		return cmd.FailErr(err, "read group")
-	}
-
-	exporter := &lifecycle.Exporter{
-		Buildpacks: group.Buildpacks,
-		Out:        os.Stdout,
-		Err:        os.Stderr,
-		UID:        uid,
-		GID:        gid,
-	}
-
 	exporter.TmpDir, err = ioutil.TempDir("", "lifecycle.exporter.layer")
 	if err != nil {
 		return cmd.FailErr(err, "create temp directory")
