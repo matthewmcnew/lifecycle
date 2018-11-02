@@ -48,6 +48,35 @@ func main() {
 }
 
 func export() error {
+	var group lifecycle.BuildpackGroup
+	if _, err := toml.DecodeFile(groupPath, &group); err != nil {
+		return cmd.FailErr(err, "read group")
+	}
+
+	exporter := &lifecycle.Exporter{
+		Buildpacks: group.Buildpacks,
+		Out:        os.Stdout,
+		Err:        os.Stderr,
+		UID:        uid,
+		GID:        gid,
+	}
+
+	if dryrun != "" {
+		// TODO : I'm not sure I like the strategy I used here, dryrun dir as tmpdir ???
+		exporter.TmpDir = dryrun
+		if err := os.MkdirAll(exporter.TmpDir, 0777); err != nil {
+			return cmd.FailErrCode(err, cmd.CodeFailedBuild)
+		}
+		_, err := exporter.Stage1(
+			launchDirSrc,
+			launchDir,
+		)
+		if err != nil {
+			return cmd.FailErrCode(err, cmd.CodeFailedBuild)
+		}
+		return nil
+	}
+
 	if useHelpers {
 		if err := img.SetupCredHelpers(repoName, runImage); err != nil {
 			return cmd.FailErr(err, "setup credential helpers")
@@ -98,39 +127,24 @@ func export() error {
 		GID:        gid,
 	}
 
-	if dryrun != "" {
-		// TODO : I'm not sure I like the strategy I used here, dryrun dir as tmpdir ???
-		exporter.TmpDir = dryrun
-		if err := os.MkdirAll(exporter.TmpDir, 0777); err != nil {
-			return cmd.FailErrCode(err, cmd.CodeFailedBuild)
-		}
-		_, err := exporter.Stage1(
-			launchDirSrc,
-			launchDir,
-		)
-		if err != nil {
-			return cmd.FailErrCode(err, cmd.CodeFailedBuild)
-		}
-	} else {
-		exporter.TmpDir, err = ioutil.TempDir("", "lifecycle.exporter.layer")
-		if err != nil {
-			return cmd.FailErr(err, "create temp directory")
-		}
-		defer os.RemoveAll(exporter.TmpDir)
+	exporter.TmpDir, err = ioutil.TempDir("", "lifecycle.exporter.layer")
+	if err != nil {
+		return cmd.FailErr(err, "create temp directory")
+	}
+	defer os.RemoveAll(exporter.TmpDir)
 
-		newImage, err := exporter.Export(
-			launchDirSrc,
-			launchDir,
-			stackImage,
-			origImage,
-		)
-		if err != nil {
-			return cmd.FailErrCode(err, cmd.CodeFailedBuild)
-		}
+	newImage, err := exporter.Export(
+		launchDirSrc,
+		launchDir,
+		stackImage,
+		origImage,
+	)
+	if err != nil {
+		return cmd.FailErrCode(err, cmd.CodeFailedBuild)
+	}
 
-		if err := repoStore.Write(newImage); err != nil {
-			return cmd.FailErrCode(err, cmd.CodeFailedUpdate, "write")
-		}
+	if err := repoStore.Write(newImage); err != nil {
+		return cmd.FailErrCode(err, cmd.CodeFailedUpdate, "write")
 	}
 
 	return nil
