@@ -7,7 +7,6 @@ import (
 	"os"
 
 	"github.com/BurntSushi/toml"
-
 	"github.com/buildpack/lifecycle"
 	"github.com/buildpack/lifecycle/cmd"
 	"github.com/buildpack/lifecycle/img"
@@ -109,7 +108,6 @@ func export() error {
 		_, err := exporter.Stage1(
 			launchDirSrc,
 			launchDir,
-			stackImage,
 		)
 		if err != nil {
 			return cmd.FailErrCode(err, cmd.CodeFailedBuild)
