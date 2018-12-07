@@ -391,3 +391,24 @@ func ComputeSHA256(t *testing.T, path string) string {
 
 	return hex.EncodeToString(hasher.Sum(make([]byte, 0, hasher.Size())))
 }
+
+func RecursiveCopy(t *testing.T, src, dst string) {
+	t.Helper()
+	fis, err := ioutil.ReadDir(src)
+	AssertNil(t, err)
+	for _, fi := range fis {
+		if fi.Mode().IsRegular() {
+			srcFile, err := os.Open(filepath.Join(src, fi.Name()))
+			AssertNil(t, err)
+			dstFile, err := os.Create(filepath.Join(dst, fi.Name()))
+			AssertNil(t, err)
+			_, err = io.Copy(dstFile, srcFile)
+			AssertNil(t, err)
+		}
+		if fi.IsDir() {
+			err = os.Mkdir(filepath.Join(dst, fi.Name()), fi.Mode())
+			AssertNil(t, err)
+			RecursiveCopy(t, filepath.Join(src, fi.Name()), filepath.Join(dst, fi.Name()))
+		}
+	}
+}

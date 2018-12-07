@@ -84,6 +84,20 @@ func (e *Exporter) PrepareExport(launchDirSrc, launchDirDst, appDirSrc, appDirDs
 		metadata.Buildpacks = append(metadata.Buildpacks, bpMetadata)
 	}
 
+	fis, err := ioutil.ReadDir(launchDirSrc)
+
+	//OUTER:
+	for _, fi := range fis {
+		for _, buildpack := range e.Buildpacks {
+			if fi.Name() == buildpack.EscapedID() {
+				//continue OUTER
+			}
+		}
+		if err := os.RemoveAll(filepath.Join(launchDirSrc, fi.Name())); err != nil {
+			return nil, errors.Wrap(err, "failed to cleanup layers dir")
+		}
+	}
+
 	data, err := json.Marshal(metadata)
 	if err != nil {
 		return nil, errors.Wrap(err, "marshal metadata")
