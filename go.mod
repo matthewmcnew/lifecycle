@@ -15,8 +15,10 @@ require (
 	github.com/pkg/errors v0.8.1
 	github.com/sclevine/spec v1.4.0
 	golang.org/x/sync v0.0.0-20190911185100-cd5d95a43a6e
-	golang.org/x/sys v0.0.0-20191010194322-b09406accb47
+	golang.org/x/sys v0.0.0-20191128015809-6d18c012aee9
 	google.golang.org/genproto v0.0.0-20190508193815-b515fa19cec8 // indirect
 )
 
 go 1.13
+
+replace github.com/google/go-containerregistry => ../go-containerregistry

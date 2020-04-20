@@ -18,9 +18,12 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"github.com/vbauerster/mpb"
+	"github.com/vbauerster/mpb/decor"
 	"io"
 	"net/http"
 	"net/url"
+	"strings"
 	"time"
 
 	"github.com/google/go-containerregistry/pkg/internal/retry"
@@ -36,6 +39,21 @@ import (
 // Taggable is an interface that enables a manifest PUT (e.g. for tagging).
 type Taggable interface {
 	RawManifest() ([]byte, error)
+}
+
+type ExplanationDecorator struct {
+	decor.Decorator
+}
+
+var LayerNames []string
+
+func padRight(str string, lenght int) string {
+	for {
+		if len(str) == lenght {
+			return str
+		}
+		str += " "
+	}
 }
 
 // Write pushes the provided img to the specified image reference.
@@ -60,13 +78,47 @@ func Write(ref name.Reference, img v1.Image, options ...Option) error {
 		client: &http.Client{Transport: tr},
 	}
 
+	bars := mpb.New(mpb.WithWidth(120))
+
+	names := []string{}
+	length := 0
+	for i, _ := range LayerNames {
+		var name string
+		if strings.Contains(LayerNames[i], ":") {
+			name = strings.Split(LayerNames[i], ":")[1] + ":"
+		} else {
+			name = LayerNames[i] + ":"
+		}
+		if len(name) > length {
+			length = len(name)
+		}
+
+		names = append(names, name)
+	}
+
 	// Upload individual layers in goroutines and collect any errors.
 	// If we can dedupe by the layer digest, try to do so. If we can't determine
 	// the digest for whatever reason, we can't dedupe and might re-upload.
 	var g errgroup.Group
 	uploaded := map[v1.Hash]bool{}
-	for _, l := range ls {
+	for i, l := range ls {
 		l := l
+		size, _ := l.Size()
+
+		//l.Compressed()
+		//digest, _ := l.Digest()
+
+		name := padRight(names[i], length)
+
+		explanation := decor.CountersKibiByte("%.2f/%.2f")
+
+		bar := bars.AddBar(size,
+			mpb.BarClearOnComplete(),
+			mpb.PrependDecorators(
+				decor.Name(name),
+			),
+			mpb.AppendDecorators(explanation),
+		)
 
 		// Handle foreign layers.
 		mt, err := l.MediaType()
@@ -91,9 +143,15 @@ func Write(ref name.Reference, img v1.Image, options ...Option) error {
 		}
 
 		g.Go(func() error {
-			return w.uploadOne(l)
+			return w.uploadOne(l, bar, func(message string) {
+				if d, ok := explanation.(decor.OnCompleteMessenger); ok {
+					d.OnCompleteMessage(" " + message)
+				}
+			})
 		})
 	}
+
+	bars.Wait()
 
 	if l, err := partial.ConfigLayer(img); err != nil {
 		// We can't read the ConfigLayer, possibly because of streaming layers,
@@ -108,13 +166,17 @@ func Write(ref name.Reference, img v1.Image, options ...Option) error {
 		if err != nil {
 			return err
 		}
-		if err := w.uploadOne(l); err != nil {
+		if err := w.uploadOne(l, nil, func(s string) {
+
+		}); err != nil {
 			return err
 		}
 	} else {
 		// We *can* read the ConfigLayer, so upload it concurrently with the layers.
 		g.Go(func() error {
-			return w.uploadOne(l)
+			return w.uploadOne(l, nil, func(s string) {
+
+			})
 		})
 
 		// Wait for the layers + config.
@@ -296,7 +358,7 @@ func (w *writer) commitBlob(location, digest string) error {
 }
 
 // uploadOne performs a complete upload of a single layer.
-func (w *writer) uploadOne(l v1.Layer) error {
+func (w *writer) uploadOne(l v1.Layer, bar *mpb.Bar, explain func(string)) error {
 	var from, mount string
 	if h, err := l.Digest(); err == nil {
 		// If we know the digest, this isn't a streaming layer. Do an existence
@@ -307,6 +369,11 @@ func (w *writer) uploadOne(l v1.Layer) error {
 		}
 		if existing {
 			logs.Progress.Printf("existing blob: %v", h)
+			if bar != nil {
+				explain("Reusing from previous image")
+				bar.SetTotal(0, true)
+			}
+
 			return nil
 		}
 
@@ -328,6 +395,11 @@ func (w *writer) uploadOne(l v1.Layer) error {
 				return err
 			}
 			logs.Progress.Printf("mounted blob: %s", h.String())
+			if bar != nil {
+				explain("Mounted from Image: " + from)
+				bar.SetTotal(0, true)
+			}
+
 			return nil
 		}
 
@@ -335,6 +407,11 @@ func (w *writer) uploadOne(l v1.Layer) error {
 		if err != nil {
 			return err
 		}
+		if bar != nil {
+			explain("Upload complete")
+			blob = bar.ProxyReader(blob)
+		}
+
 		location, err = w.streamBlob(blob, location)
 		if err != nil {
 			return err
@@ -542,7 +619,9 @@ func WriteLayer(repo name.Repository, layer v1.Layer, options ...Option) error {
 		client: &http.Client{Transport: tr},
 	}
 
-	return w.uploadOne(layer)
+	return w.uploadOne(layer, nil, func(s string) {
+
+	})
 }
 
 // Tag adds a tag to the given Taggable.

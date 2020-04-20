@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"github.com/google/go-containerregistry/pkg/authn"
 	"io/ioutil"
 	"os"
 
@@ -11,6 +12,7 @@ import (
 	"github.com/buildpacks/imgutil/remote"
 	"github.com/docker/docker/client"
 	"github.com/google/go-containerregistry/pkg/name"
+	ggcrremote "github.com/google/go-containerregistry/pkg/v1/remote"
 	"github.com/pkg/errors"
 
 	"github.com/buildpacks/lifecycle"
@@ -288,6 +290,26 @@ func initRemoteImage(imageName string, runImageRef string, analyzedMD lifecycle.
 	if err != nil {
 		return nil, "", cmd.FailErr(err, "get run image reference")
 	}
+
+	myRef, err := name.ParseReference(runImageRef)
+	if err != nil {
+		return nil, "", cmd.FailErr(err, "get run image reference")
+	}
+	run, err := ggcrremote.Image(myRef, ggcrremote.WithAuthFromKeychain(authn.DefaultKeychain))
+	if err != nil {
+		return nil, "", cmd.FailErr(err, "get run image reference")
+	}
+
+	layers, err := run.Layers()
+	if err != nil {
+		return nil, "", cmd.FailErr(err, "get run image reference")
+	}
+
+	for i, _ := range layers {
+		ggcrremote.LayerNames = append(ggcrremote.LayerNames, fmt.Sprintf("Stack Layer (%d)", i))
+	}
+
+
 	return appImage, runImageID.String(), nil
 }
 

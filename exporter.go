@@ -3,6 +3,7 @@ package lifecycle
 import (
 	"encoding/json"
 	"fmt"
+	ggcrremote "github.com/google/go-containerregistry/pkg/v1/remote"
 	"io"
 	"os"
 	"path/filepath"
@@ -50,6 +51,7 @@ type SliceLayer struct {
 type ExportOptions struct {
 	LayersDir          string
 	AppDir             string
+	Image              imgutil.Image
 	WorkingImage       imgutil.Image
 	RunImageRef        string
 	OrigMetadata       LayersMetadata
@@ -94,6 +96,7 @@ func (e *Exporter) Export(opts ExportOptions) error {
 	}
 
 	// launcher
+	ggcrremote.LayerNames = append(ggcrremote.LayerNames, "Launcher Layer")
 	meta.Launcher.SHA, err = e.addOrReuseLayer(opts.WorkingImage, &layer{path: opts.LauncherConfig.Path, identifier: "launcher"}, opts.OrigMetadata.Launcher.SHA)
 	if err != nil {
 		return errors.Wrap(err, "exporting launcher layer")
@@ -120,6 +123,8 @@ func (e *Exporter) Export(opts ExportOptions) error {
 
 			if layer.hasLocalContents() {
 				origLayerMetadata := opts.OrigMetadata.MetadataForBuildpack(bp.ID).Layers[layer.name()]
+
+				ggcrremote.LayerNames = append(ggcrremote.LayerNames, layer.Identifier())
 				lmd.SHA, err = e.addOrReuseLayer(opts.WorkingImage, &layer, origLayerMetadata.SHA)
 				if err != nil {
 					return err
@@ -135,6 +140,7 @@ func (e *Exporter) Export(opts ExportOptions) error {
 
 				e.Logger.Infof("Reusing layer '%s'\n", layer.Identifier())
 				e.Logger.Debugf("Layer '%s' SHA: %s\n", layer.Identifier(), origLayerMetadata.SHA)
+				ggcrremote.LayerNames = append(ggcrremote.LayerNames, layer.Identifier())
 				if err := opts.WorkingImage.ReuseLayer(origLayerMetadata.SHA); err != nil {
 					return errors.Wrapf(err, "reusing layer: '%s'", layer.Identifier())
 				}
@@ -160,6 +166,7 @@ func (e *Exporter) Export(opts ExportOptions) error {
 	}
 
 	// config
+	ggcrremote.LayerNames = append(ggcrremote.LayerNames, "config layer")
 	meta.Config.SHA, err = e.addOrReuseLayer(opts.WorkingImage, &layer{path: filepath.Join(opts.LayersDir, "config"), identifier: "config"}, opts.OrigMetadata.Config.SHA)
 	if err != nil {
 		return errors.Wrap(err, "exporting config layer")
@@ -418,7 +425,8 @@ func (e *Exporter) addSliceLayers(image imgutil.Image, sliceLayers []SliceLayer,
 	var numberOfReusedLayers int
 	var appMD []LayerMetadata
 
-	for _, slice := range sliceLayers {
+	for i, slice := range sliceLayers {
+		ggcrremote.LayerNames = append(ggcrremote.LayerNames, fmt.Sprintf("app layer %d", i))
 		var err error
 
 		found := false
